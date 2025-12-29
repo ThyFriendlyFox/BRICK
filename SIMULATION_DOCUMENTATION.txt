@@ -1,0 +1,58 @@
+# DevFlow Studio: Simulation & Mock Data Documentation
+
+This document outlines all hardcoded data, simulated behaviors, and visual placeholders used within the DevFlow Studio application to demonstrate functionality without a live backend or active IDE connection.
+
+## 1. Mock Data Constants
+**File:** `constants.ts`
+
+*   **`MOCK_FEEDBACK`**: A static array of `FeedbackItem` objects representing social media interactions.
+    *   Includes examples from X (Twitter) and Reddit.
+    *   Types include: 'question', 'bug', 'positive', 'request'.
+    *   Timestamps are calculated relative to `Date.now()` (e.g., "5 mins ago").
+*   **`SAMPLE_CODE_SNIPPET`**: A hardcoded string of TypeScript code using the Google GenAI SDK. This serves as the "context" passed to the draft generator when no real IDE selection is available.
+
+## 2. Service Layer Simulations
+**File:** `services/geminiService.ts`
+
+*   **API Key Fallback / Demo Mode**:
+    *   The service checks for `process.env.API_KEY`.
+    *   **Simulation**: If the key is missing (which is the default state in some preview environments), the `generateDraftContent` function returns a promise that resolves after **1500ms**.
+    *   **Return Value**: It returns a hardcoded "DEMO MODE" draft object:
+        ```json
+        {
+          "title": "Update: [Context]",
+          "content": "[DEMO MODE - NO API KEY]\n\nJust shipped [Context].\n\nThe flow is feeling good. #buildinpublic"
+        }
+        ```
+
+## 3. Component Behavior Simulations
+
+### Onboarding (`components/Onboarding.tsx`)
+*   **Authentication Delay**: The "Connect X" and "Connect Reddit" buttons trigger a `setTimeout` of **600ms** to simulate the latency of an OAuth handshake or API verification request.
+*   **State**: Connection status is stored in local component state (`config`), not persisted.
+
+### App Root (`App.tsx`)
+*   **IDE Connection Handshake**:
+    *   The "Establish MCP Link" button toggles the `isIdeConnected` boolean state.
+    *   **Simulation**: This bypasses actual WebSocket/HTTP checks to an MCP (Model Context Protocol) server and immediately grants access to the main dashboard.
+*   **Status Indicators**:
+    *   The "Protocol Status" text ("MCP-Transport: Idle") in the disconnected view is static.
+
+### Drafts Panel (`components/DraftsPanel.tsx`)
+*   **Context Injection**: Calls `generateDraftContent` using the hardcoded `SAMPLE_CODE_SNIPPET` as the `codeSnippet` argument.
+*   **Media Placeholder**: The "diff --git a/auth.ts" UI element is a static JSX block designed to look like a file attachment. It is not interactive and does not represent a real file difference.
+*   **Session History**: The history of generated drafts is stored in local React state and wipes on page refresh.
+
+### Feedback Panel (`components/FeedbackPanel.tsx`)
+*   **Data Source**: Initializes its state directly from the `MOCK_FEEDBACK` constant.
+*   **Interactions**: Reply buttons are visual only; they do not open external links or trigger API calls.
+
+### Settings Panel (`components/SettingsPanel.tsx`)
+*   **Tone Calibration**:
+    *   **Import Simulation**: The "Import from X History" button injects a static string of example tweets into the calibration text area to demonstrate the feature.
+    *   **Analysis Simulation**: The "Calibrate" button triggers a 3-second loading state (`analyzed`) to mimic AI processing/finetuning time before showing the success state.
+*   **Connection Metadata**:
+    *   "Local Host Port": Displays `http://localhost:3000/mcp`. This is a static string, not a reflected value from a server configuration.
+    *   "CONNECTED" status text is hardcoded.
+*   **Privacy Settings**: The ignored patterns (`.env`, `secrets/*`) are static badges.
+*   **Version Info**: "DevFlow Studio v1.0.4-alpha" is a hardcoded string.
