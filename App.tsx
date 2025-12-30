@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Activity, Settings, ShieldCheck, Square } from 'lucide-react';
 import DraftsPanel from './components/DraftsPanel';
@@ -19,6 +20,9 @@ const App: React.FC = () => {
   
   // State for AI Voice Calibration
   const [toneContext, setToneContext] = useState<string>('');
+  
+  // State for Credits
+  const [credits] = useState(85);
 
   const renderContent = () => {
     switch (activeActivity) {
@@ -35,24 +39,16 @@ const App: React.FC = () => {
         if (!isIdeConnected) {
           return (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-df-black animate-in fade-in duration-300">
-              <Square size={48} strokeWidth={4} className="text-df-orange mb-6 animate-pulse" />
-              <h2 className="text-df-white font-bold text-sm mb-2 uppercase tracking-tighter">AGENT DISCONNECTED</h2>
+              <h2 className="text-df-white font-bold text-sm mb-2 uppercase tracking-tighter">DISCONNECTED</h2>
               <p className="text-df-gray text-[10px] leading-relaxed mb-8 max-w-xs mx-auto">
-                BRICK needs to be initialized via your IDE agent. Run <code className="text-df-orange">mcp install brick</code> in your IDE terminal or connect below.
+                BRICK needs to be initialized.
               </p>
               <button 
                 onClick={() => setIsIdeConnected(true)}
                 className="w-full max-w-xs py-3 bg-df-orange text-df-black font-bold text-xs hover:bg-white transition-colors uppercase border border-df-orange"
               >
-                Establish MCP Link
+                Establish Link
               </button>
-              <div className="mt-12 w-full max-w-xs p-3 border border-df-border bg-[#111] text-left mx-auto">
-                 <div className="text-[9px] text-df-gray font-bold uppercase mb-2">Protocol Status</div>
-                 <div className="flex items-center gap-2 text-[10px] text-df-gray/50">
-                    <div className="w-2 h-2 rounded-full bg-red-900"></div>
-                    <span>MCP-Transport: Idle</span>
-                 </div>
-              </div>
             </div>
           );
         }
@@ -112,34 +108,49 @@ const App: React.FC = () => {
 
   if (view === 'onboarding') {
     return (
-      <div className="h-screen w-screen bg-[#0a0a0a] flex items-center justify-center font-mono">
-        <div className="w-[440px] h-[640px] bg-black border border-[#222] relative shadow-[0_0_100px_rgba(255,98,0,0.1)] overflow-hidden">
-          <Onboarding onComplete={() => setView('main')} />
-        </div>
+      <div className="h-screen w-screen bg-black font-mono overflow-hidden">
+        <Onboarding onComplete={() => setView('main')} />
       </div>
     );
   }
 
   return (
     <div className="h-screen w-screen flex bg-[#1e1e1e] text-gray-400 font-mono overflow-hidden selection:bg-df-orange/30">
-      {/* 1. Activity Bar (Far Left) */}
-      <div className="w-12 bg-[#181818] flex flex-col items-center py-4 gap-6 shrink-0 border-r border-[#000]">
+      {/* 1. Activity Bar (Far Left) - Keep w-12 */}
+      <div className="w-12 bg-[#181818] flex flex-col items-center py-4 shrink-0 border-r border-[#000]">
         
         {/* BRICK Tab */}
         <button 
           title="BRICK"
           onClick={() => setActiveActivity('devflow')}
-          className={`relative p-1 transition-transform active:scale-95 group mt-2`}
+          className={`relative p-1 transition-transform active:scale-95 group mt-2 mb-4`}
         >
           <div className={`w-8 h-8 flex items-center justify-center text-black font-bold text-lg transition-all ${activeActivity === 'devflow' ? 'bg-df-orange' : 'bg-[#333] hover:bg-[#444]'}`}>
             <Square size={20} strokeWidth={4} fill={activeActivity === 'devflow' ? 'black' : 'none'} className={activeActivity === 'devflow' ? 'text-black' : 'text-df-gray group-hover:text-white'} />
           </div>
-          {isIdeConnected && activeActivity !== 'devflow' && (
-            <div className="absolute -right-1 top-0 w-2 h-2 bg-green-500 rounded-full border border-black shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
-          )}
         </button>
+
+        {/* Vertical Credit Meter - Wider (w-8) within the w-12 sidebar */}
+        <div className="flex-grow w-full flex flex-col items-center justify-center py-4 px-2 group cursor-help">
+          <div className="w-8 h-full bg-black border border-df-border relative overflow-hidden flex flex-col justify-end shadow-inner">
+            <div 
+              className="bg-df-orange w-full transition-all duration-1000 ease-in-out" 
+              style={{ height: `${credits}%` }}
+            ></div>
+            {/* Meter Grid Overlay: 16 lines = 15 gaps/squares */}
+            <div className="absolute inset-0 flex flex-col justify-between py-0 opacity-25 pointer-events-none">
+              {[...Array(16)].map((_, i) => (
+                <div key={i} className="h-[1px] w-full bg-[#444]" />
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col items-center leading-none mt-4 shrink-0">
+            <span className="text-base font-black text-df-white tracking-tighter">{credits}</span>
+            <span className="text-[10px] font-black text-df-orange uppercase tracking-widest mt-0.5">CR</span>
+          </div>
+        </div>
         
-        <div className="mt-auto mb-2 flex flex-col gap-6 items-center">
+        <div className="mt-4 mb-2 flex flex-col gap-6 items-center shrink-0">
           <button 
             title="Settings"
             onClick={() => setActiveActivity('settings')}

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Check, Edit2 } from 'lucide-react';
 import { Draft, Platform } from '../types';
@@ -123,7 +124,7 @@ const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlat
             onClick={() => setActivePlatform(Platform.X)}
             className={`text-xs font-bold transition-colors ${activePlatform === Platform.X ? 'text-df-orange' : 'text-df-gray hover:text-white'}`}
           >
-            X (TWITTER)
+            X
           </button>
           <div className="h-4 w-[1px] bg-df-border"></div>
           <button 

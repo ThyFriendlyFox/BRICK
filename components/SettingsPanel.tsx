@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Shield, Zap, Globe, Cpu, Link, Lock, EyeOff, Mic, Upload, Check } from 'lucide-react';
+import { Shield, Zap, Globe, Cpu, Link, Lock, EyeOff, Mic, Upload, Check, RefreshCw, Layers } from 'lucide-react';
 
 interface SettingsPanelProps {
   toneContext: string;
@@ -8,6 +9,11 @@ interface SettingsPanelProps {
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneContext }) => {
   const [analyzed, setAnalyzed] = useState(false);
+  const [protocols, setProtocols] = useState({
+    watcher: true,
+    commits: true,
+    mcp: true
+  });
 
   const handleSimulateImport = () => {
     // Simulate importing existing tweets
@@ -26,6 +32,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
     setTimeout(() => setAnalyzed(false), 3000);
   };
 
+  const toggleProtocol = (key: keyof typeof protocols) => {
+    setProtocols(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
   return (
     <div className="flex flex-col h-full bg-df-black">
       <div className="p-4 border-b border-df-border flex justify-between items-center">
@@ -33,6 +43,55 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
       </div>
 
       <div className="flex-grow overflow-y-auto p-4 space-y-8">
+        {/* SYNC PROTOCOLS SECTION */}
+        <section>
+          <h3 className="text-[10px] font-bold text-df-orange uppercase mb-4 flex items-center gap-2">
+            <Layers size={12} /> SYNC PROTOCOLS
+          </h3>
+          <div className="space-y-3">
+             <div className="bg-[#111] border border-df-border p-3 space-y-4">
+                <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                        <span className="text-xs text-df-white font-bold uppercase">Live File Watcher</span>
+                        <span className="text-[9px] text-df-gray">Detects raw file saves and updates.</span>
+                    </div>
+                    <button 
+                        onClick={() => toggleProtocol('watcher')}
+                        className={`w-10 h-5 border flex items-center transition-colors ${protocols.watcher ? 'bg-df-orange border-df-orange justify-end' : 'bg-black border-df-border justify-start'}`}
+                    >
+                        <div className={`w-4 h-4 bg-black m-0.5 border ${protocols.watcher ? 'border-black' : 'border-df-border'}`}></div>
+                    </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                        <span className="text-xs text-df-white font-bold uppercase">Commit Detector</span>
+                        <span className="text-[9px] text-df-gray">Triggers on git commits</span>
+                    </div>
+                    <button 
+                        onClick={() => toggleProtocol('commits')}
+                        className={`w-10 h-5 border flex items-center transition-colors ${protocols.commits ? 'bg-df-orange border-df-orange justify-end' : 'bg-black border-df-border justify-start'}`}
+                    >
+                        <div className={`w-4 h-4 bg-black m-0.5 border ${protocols.commits ? 'border-black' : 'border-df-border'}`}></div>
+                    </button>
+                </div>
+
+                <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                        <span className="text-xs text-df-white font-bold uppercase">MCP Standard</span>
+                        <span className="text-[9px] text-df-gray">Hooks into AI agent reasoning flows.</span>
+                    </div>
+                    <button 
+                        onClick={() => toggleProtocol('mcp')}
+                        className={`w-10 h-5 border flex items-center transition-colors ${protocols.mcp ? 'bg-df-orange border-df-orange justify-end' : 'bg-black border-df-border justify-start'}`}
+                    >
+                        <div className={`w-4 h-4 bg-black m-0.5 border ${protocols.mcp ? 'border-black' : 'border-df-border'}`}></div>
+                    </button>
+                </div>
+             </div>
+          </div>
+        </section>
+
         {/* TONE CALIBRATION SECTION */}
         <section>
           <h3 className="text-[10px] font-bold text-df-orange uppercase mb-4 flex items-center gap-2">
