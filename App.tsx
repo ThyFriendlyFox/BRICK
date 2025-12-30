@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Square, Terminal, Cpu, Activity } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, Settings, ShieldCheck, Square } from 'lucide-react';
 import DraftsPanel from './components/DraftsPanel';
 import FeedbackPanel from './components/FeedbackPanel';
 import SettingsPanel from './components/SettingsPanel';
 import Onboarding from './components/Onboarding';
-import { Platform, TriggerSource, AgentLog, UserConfig } from './types';
+import { Platform } from './types';
 
 export type ActivityTab = 'devflow' | 'settings';
 
@@ -13,64 +13,12 @@ const App: React.FC = () => {
   const [activeActivity, setActiveActivity] = useState<ActivityTab>('devflow');
   const [activeTab, setActiveTab] = useState<'drafts' | 'feedback'>('drafts');
   const [activePlatform, setActivePlatform] = useState<Platform>(Platform.X);
-  
-  // Simulation States
+  // triggerContext is kept for prop interface, but currently unused without the simulator or real backend
+  const [triggerContext, setTriggerContext] = useState<string | null>(null);
   const [isIdeConnected, setIsIdeConnected] = useState(false);
-  const [mcpEnabled, setMcpEnabled] = useState(true);
-  const [fileWatcherEnabled, setFileWatcherEnabled] = useState(true);
-  const [agentLogs, setAgentLogs] = useState<AgentLog[]>([]);
-  const [autoTrigger, setAutoTrigger] = useState<{context: string, source: TriggerSource} | null>(null);
-
-  // Tone Calibration
+  
+  // State for AI Voice Calibration
   const [toneContext, setToneContext] = useState<string>('');
-
-  const handleOnboardingComplete = (config: UserConfig) => {
-    setMcpEnabled(config.mcpEnabled);
-    setFileWatcherEnabled(config.fileWatcherEnabled);
-    setView('main');
-  };
-
-  // Simulation: Real-time Protocol activity
-  useEffect(() => {
-    if (!isIdeConnected) return;
-
-    let logInterval: any;
-    let pulseInterval: any;
-
-    if (mcpEnabled) {
-      logInterval = setInterval(() => {
-        const messages = [
-          "Thought: Refactoring the auth hook to use native GenAI streaming.",
-          "Action: Analyzing performance bottlenecks in feed rendering.",
-          "Thought: The user experience would be better if we added a brutalist splash screen.",
-          "Action: Optimized 4 redundant API calls in the feedback loop.",
-          "Action: Updating MCP transport protocol to v2.1."
-        ];
-        const msg = messages[Math.floor(Math.random() * messages.length)];
-        const newLog: AgentLog = { id: Date.now().toString(), timestamp: Date.now(), message: msg, type: 'thought' };
-        setAgentLogs(prev => [newLog, ...prev].slice(0, 30));
-        
-        // Random chance to trigger a draft based on agent activity
-        if (Math.random() > 0.85) {
-          setAutoTrigger({ context: msg, source: 'AGENT_LOG' });
-        }
-      }, 7000);
-    }
-
-    if (fileWatcherEnabled) {
-      pulseInterval = setInterval(() => {
-        if (Math.random() > 0.92) {
-          const fileContext = "Detected significant changes in src/services/geminiService.ts (added streaming support)";
-          setAutoTrigger({ context: fileContext, source: 'FILE_PULSE' });
-        }
-      }, 15000);
-    }
-
-    return () => {
-      clearInterval(logInterval);
-      clearInterval(pulseInterval);
-    };
-  }, [isIdeConnected, mcpEnabled, fileWatcherEnabled]);
 
   const renderContent = () => {
     switch (activeActivity) {
@@ -79,10 +27,6 @@ const App: React.FC = () => {
           <SettingsPanel 
             toneContext={toneContext} 
             setToneContext={setToneContext} 
-            mcpEnabled={mcpEnabled}
-            setMcpEnabled={setMcpEnabled}
-            fileWatcherEnabled={fileWatcherEnabled}
-            setFileWatcherEnabled={setFileWatcherEnabled}
           />
         );
         
@@ -94,11 +38,11 @@ const App: React.FC = () => {
               <Square size={48} strokeWidth={4} className="text-df-orange mb-6 animate-pulse" />
               <h2 className="text-df-white font-bold text-sm mb-2 uppercase tracking-tighter">AGENT DISCONNECTED</h2>
               <p className="text-df-gray text-[10px] leading-relaxed mb-8 max-w-xs mx-auto">
-                BRICK needs to be initialized via your IDE agent. Run <code className="text-df-orange uppercase">mcp install brick</code> in your IDE terminal or connect below.
+                BRICK needs to be initialized via your IDE agent. Run <code className="text-df-orange">mcp install brick</code> in your IDE terminal or connect below.
               </p>
               <button 
                 onClick={() => setIsIdeConnected(true)}
-                className="w-full max-w-xs py-3 bg-df-orange text-df-black font-bold text-xs hover:bg-white transition-colors uppercase border border-df-orange tracking-widest"
+                className="w-full max-w-xs py-3 bg-df-orange text-df-black font-bold text-xs hover:bg-white transition-colors uppercase border border-df-orange"
               >
                 Establish MCP Link
               </button>
@@ -106,7 +50,7 @@ const App: React.FC = () => {
                  <div className="text-[9px] text-df-gray font-bold uppercase mb-2">Protocol Status</div>
                  <div className="flex items-center gap-2 text-[10px] text-df-gray/50">
                     <div className="w-2 h-2 rounded-full bg-red-900"></div>
-                    <span className="uppercase">MCP-Transport: Idle</span>
+                    <span>MCP-Transport: Idle</span>
                  </div>
               </div>
             </div>
@@ -114,63 +58,50 @@ const App: React.FC = () => {
         }
         return (
           <div className="flex flex-col h-full animate-in fade-in duration-200">
-            {/* Unified Header */}
-            <div className="h-10 border-b border-df-border flex items-center px-4 bg-df-black shrink-0 justify-between">
-                <div className="flex items-center gap-4">
-                    <span className="text-[10px] font-bold text-df-white tracking-widest uppercase">Protocol Active</span>
-                    <div className="flex items-center gap-2">
-                        <div className={`w-1.5 h-1.5 rounded-full ${mcpEnabled ? 'bg-green-500 animate-pulse' : 'bg-df-gray'}`}></div>
-                        <span className="text-[9px] text-df-gray uppercase font-bold">MCP</span>
-                    </div>
-                    <div className={`flex items-center gap-2 ${fileWatcherEnabled ? 'opacity-100' : 'opacity-20'}`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${fileWatcherEnabled ? 'bg-df-orange animate-pulse shadow-[0_0_5px_#FF6200]' : 'bg-df-gray'}`}></div>
-                        <span className="text-[9px] text-df-gray uppercase font-bold">Watcher</span>
-                    </div>
-                </div>
-                <div className="flex border-l border-df-border h-full">
-                    <button onClick={() => setActiveTab('drafts')} className={`px-4 text-[10px] font-bold uppercase transition-colors ${activeTab === 'drafts' ? 'bg-[#111] text-df-orange' : 'text-df-gray hover:text-white'}`}>Drafts</button>
-                    <button onClick={() => setActiveTab('feedback')} className={`px-4 text-[10px] font-bold uppercase relative transition-colors ${activeTab === 'feedback' ? 'bg-[#111] text-df-orange' : 'text-df-gray hover:text-white'}`}>
-                        Feedback
-                        <span className="absolute top-1 right-1 w-1 h-1 bg-df-orange rounded-full"></span>
-                    </button>
-                </div>
+            {/* Mobile/Tablet Tabs - Hidden on Desktop */}
+            <div className="h-10 flex border-b border-df-border bg-df-black shrink-0 lg:hidden">
+              <button 
+                onClick={() => setActiveTab('drafts')}
+                className={`flex-1 text-xs font-bold tracking-wider hover:bg-[#111] transition-colors ${activeTab === 'drafts' ? 'text-df-white border-b-4 border-df-orange pt-1' : 'text-df-gray pt-1 border-b-4 border-transparent'}`}
+              >
+                DRAFTS
+              </button>
+              <button 
+                onClick={() => setActiveTab('feedback')}
+                className={`flex-1 text-xs font-bold tracking-wider hover:bg-[#111] transition-colors relative ${activeTab === 'feedback' ? 'text-df-white border-b-4 border-df-orange pt-1' : 'text-df-gray pt-1 border-b-4 border-transparent'}`}
+              >
+                FEEDBACK
+                <span className="absolute top-2 right-8 w-1.5 h-1.5 bg-df-orange rounded-full animate-pulse"></span>
+              </button>
             </div>
 
-            <div className="flex-grow overflow-hidden flex flex-col lg:flex-row">
-              {/* Main Column */}
-              <div className="flex-grow h-full border-r border-df-border">
-                {activeTab === 'drafts' ? (
-                  <DraftsPanel 
-                    activePlatform={activePlatform} 
-                    setActivePlatform={setActivePlatform} 
-                    triggerContext={autoTrigger?.context || null}
-                    triggerSource={autoTrigger?.source || 'COMMIT'}
-                    toneContext={toneContext}
-                  />
-                ) : (
-                  <FeedbackPanel />
-                )}
+            {/* Content Area - Responsive Grid */}
+            <div className="flex-grow overflow-hidden relative flex flex-col lg:flex-row">
+              {/* Left Column (Drafts) */}
+              <div className={`flex-grow h-full lg:w-1/2 lg:border-r border-df-border ${activeTab === 'drafts' ? 'block' : 'hidden lg:block'}`}>
+                 {/* Desktop Header */}
+                 <div className="hidden lg:flex h-10 border-b border-df-border items-center px-4 bg-df-black shrink-0">
+                    <span className="text-xs font-bold text-df-white tracking-wider">DRAFTS</span>
+                 </div>
+                 <div className="h-full lg:h-[calc(100%-40px)]">
+                    <DraftsPanel 
+                      activePlatform={activePlatform} 
+                      setActivePlatform={setActivePlatform} 
+                      triggerContext={triggerContext}
+                      toneContext={toneContext}
+                    />
+                 </div>
               </div>
 
-              {/* Right Sidebar: Agent Log */}
-              <div className="hidden xl:flex flex-col w-72 bg-df-black h-full shrink-0 animate-in slide-in-from-right duration-500">
-                 <div className="p-3 border-b border-df-border flex items-center gap-2 bg-[#050505]">
-                    <Terminal size={12} className="text-df-orange" />
-                    <span className="text-[10px] font-bold text-df-gray uppercase tracking-widest">Agent Thought Stream</span>
+              {/* Right Column (Feedback) */}
+              <div className={`flex-grow h-full lg:w-1/2 ${activeTab === 'feedback' ? 'block' : 'hidden lg:block'}`}>
+                 {/* Desktop Header */}
+                 <div className="hidden lg:flex h-10 border-b border-df-border items-center px-4 bg-df-black shrink-0 relative">
+                    <span className="text-xs font-bold text-df-white tracking-wider">FEEDBACK</span>
+                    <span className="absolute top-3 right-4 w-1.5 h-1.5 bg-df-orange rounded-full animate-pulse"></span>
                  </div>
-                 <div className="flex-grow overflow-y-auto p-4 font-mono text-[9px] space-y-4">
-                    {!mcpEnabled && (
-                        <div className="text-df-gray/30 italic text-center mt-12 uppercase">Enable MCP in settings to sync thoughts.</div>
-                    )}
-                    {agentLogs.length === 0 && mcpEnabled && (
-                        <div className="text-df-gray/30 italic text-center mt-12 uppercase">Handshaking...</div>
-                    )}
-                    {agentLogs.map(log => (
-                        <div key={log.id} className="animate-in fade-in slide-in-from-left-2 duration-300 border-l border-df-border pl-2">
-                            <span className="text-df-gray/40 block mb-1">[{new Date(log.timestamp).toLocaleTimeString([], {second:'2-digit'})}]</span>
-                            <span className="text-df-white leading-relaxed tracking-tight">{log.message}</span>
-                        </div>
-                    ))}
+                 <div className="h-full lg:h-[calc(100%-40px)]">
+                    <FeedbackPanel />
                  </div>
               </div>
             </div>
@@ -183,37 +114,51 @@ const App: React.FC = () => {
     return (
       <div className="h-screen w-screen bg-[#0a0a0a] flex items-center justify-center font-mono">
         <div className="w-[440px] h-[640px] bg-black border border-[#222] relative shadow-[0_0_100px_rgba(255,98,0,0.1)] overflow-hidden">
-          <Onboarding onComplete={handleOnboardingComplete} />
+          <Onboarding onComplete={() => setView('main')} />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen w-screen flex bg-[#1e1e1e] text-gray-400 font-mono overflow-hidden">
+    <div className="h-screen w-screen flex bg-[#1e1e1e] text-gray-400 font-mono overflow-hidden selection:bg-df-orange/30">
+      {/* 1. Activity Bar (Far Left) */}
       <div className="w-12 bg-[#181818] flex flex-col items-center py-4 gap-6 shrink-0 border-r border-[#000]">
+        
+        {/* BRICK Tab */}
         <button 
           title="BRICK"
           onClick={() => setActiveActivity('devflow')}
           className={`relative p-1 transition-transform active:scale-95 group mt-2`}
         >
-          <div className={`w-8 h-8 flex items-center justify-center text-black font-bold transition-all ${activeActivity === 'devflow' ? 'bg-df-orange shadow-[0_0_10px_#FF6200]' : 'bg-[#333]'}`}>
-            <Square size={20} strokeWidth={4} fill={activeActivity === 'devflow' ? 'black' : 'none'} className={activeActivity === 'devflow' ? 'text-black' : 'text-df-gray'} />
+          <div className={`w-8 h-8 flex items-center justify-center text-black font-bold text-lg transition-all ${activeActivity === 'devflow' ? 'bg-df-orange' : 'bg-[#333] hover:bg-[#444]'}`}>
+            <Square size={20} strokeWidth={4} fill={activeActivity === 'devflow' ? 'black' : 'none'} className={activeActivity === 'devflow' ? 'text-black' : 'text-df-gray group-hover:text-white'} />
           </div>
+          {isIdeConnected && activeActivity !== 'devflow' && (
+            <div className="absolute -right-1 top-0 w-2 h-2 bg-green-500 rounded-full border border-black shadow-[0_0_5px_rgba(34,197,94,0.5)]"></div>
+          )}
         </button>
+        
         <div className="mt-auto mb-2 flex flex-col gap-6 items-center">
           <button 
             title="Settings"
             onClick={() => setActiveActivity('settings')}
-            className={`p-1 transition-all ${activeActivity === 'settings' ? 'text-df-orange' : 'text-gray-600 hover:text-df-white'}`}
+            className={`p-1 transition-all hover:scale-110 ${activeActivity === 'settings' ? 'text-df-orange border-l-2 border-df-orange pl-2' : 'text-gray-600 hover:text-gray-300'}`}
           >
             <Settings size={24} strokeWidth={1.5} />
           </button>
         </div>
       </div>
 
+      {/* 2. Main Content Area */}
       <div className="flex-grow flex flex-col bg-[#111] relative overflow-hidden items-center justify-center">
-         <div className="w-full max-w-7xl h-full flex flex-col bg-df-black border-x border-[#333] shadow-2xl relative z-10 transition-all">
+         {/* Background Decoration */}
+         <div className="absolute inset-0 bg-black/5 flex items-center justify-center pointer-events-none">
+            <div className="text-[20vw] font-black text-white/[0.02] select-none -rotate-6 tracking-tighter">BRICK</div>
+         </div>
+         
+         {/* Central Panel Container */}
+         <div className="w-full max-w-2xl lg:max-w-7xl h-full flex flex-col bg-df-black border-x border-[#333] shadow-2xl relative z-10 transition-all duration-300">
             {renderContent()}
          </div>
       </div>

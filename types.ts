@@ -3,16 +3,13 @@ export enum Platform {
   REDDIT = 'REDDIT'
 }
 
-export type TriggerSource = 'COMMIT' | 'AGENT_LOG' | 'FILE_PULSE';
-
 export interface Draft {
   id: string;
   timestamp: number;
   platform: Platform;
   content: string;
-  source: TriggerSource;
-  title?: string;
-  mediaUrl?: string;
+  title?: string; // For Reddit
+  mediaUrl?: string; // Placeholder for screenshots
   posted: boolean;
 }
 
@@ -30,14 +27,5 @@ export interface FeedbackItem {
 export interface UserConfig {
   xConnected: boolean;
   redditConnected: boolean;
-  mcpEnabled: boolean;
-  fileWatcherEnabled: boolean;
   setupComplete: boolean;
-}
-
-export interface AgentLog {
-  id: string;
-  timestamp: number;
-  message: string;
-  type: 'thought' | 'action' | 'error';
 }
