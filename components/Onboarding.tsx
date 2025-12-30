@@ -1,16 +1,16 @@
 
 import React, { useState } from 'react';
-import { ArrowRight, Check, GitPullRequest, Users, Zap, Square, Mail, MessageSquare, MessageCircle, X as XIcon } from 'lucide-react';
+import { ArrowRight, GitPullRequest, Users, Zap, Square, Mail, MessageCircle } from 'lucide-react';
 import { UserConfig } from '../types';
 
 interface OnboardingProps {
   onComplete: () => void;
 }
 
-// High-quality vector sources for brand logos
-const X_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/5/53/X_logo_2023_original.svg";
-const REDDIT_LOGO_URL = "https://www.svgrepo.com/show/354256/reddit-icon.svg";
-const DISCORD_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/8/89/Discord_Logo_sans_text.svg";
+// Local asset paths
+const X_LOGO_PATH = "/assets/x-logo.png";
+const REDDIT_LOGO_PATH = "/assets/reddit-logo.png";
+const DISCORD_LOGO_PATH = "/assets/discord-logo.png";
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [step, setStep] = useState(1);
@@ -155,10 +155,10 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   // --- STEP 5: CONNECTIONS ---
   const renderStep5 = () => {
     const platforms = [
-      { id: 'xConnected' as keyof UserConfig, label: 'X', Icon: null, imageUrl: X_LOGO_URL },
-      { id: 'redditConnected' as keyof UserConfig, label: 'REDDIT', Icon: null, imageUrl: REDDIT_LOGO_URL },
-      { id: 'discordConnected' as keyof UserConfig, label: 'DISCORD', Icon: null, imageUrl: DISCORD_LOGO_URL },
-      { id: 'emailConnected' as keyof UserConfig, label: 'EMAIL', Icon: Mail, imageUrl: null },
+      { id: 'xConnected' as keyof UserConfig, label: 'X', Icon: null, imagePath: X_LOGO_PATH },
+      { id: 'redditConnected' as keyof UserConfig, label: 'REDDIT', Icon: null, imagePath: REDDIT_LOGO_PATH },
+      { id: 'discordConnected' as keyof UserConfig, label: 'DISCORD', Icon: null, imagePath: DISCORD_LOGO_PATH },
+      { id: 'emailConnected' as keyof UserConfig, label: 'EMAIL', Icon: Mail, imagePath: null },
     ];
 
     const isAnyConnected = config.xConnected || config.redditConnected || config.emailConnected || config.discordConnected;
@@ -175,7 +175,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
           </div>
 
           <div className="flex flex-row flex-wrap justify-between px-6 w-full max-w-2xl">
-            {platforms.map(({ id, label, Icon, imageUrl }) => {
+            {platforms.map(({ id, label, Icon, imagePath }) => {
               const isConnected = config[id];
               return (
                 <button
@@ -193,15 +193,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                         ? 'border-df-orange bg-df-orange/10 shadow-[4px_4px_0px_rgba(255,98,0,0.2)]' 
                         : 'border-[#222] bg-[#080808] group-hover:border-df-gray'}
                   `}>
-                    {imageUrl ? (
+                    {imagePath ? (
                       <div 
                         className={`w-10 h-10 transition-all duration-300 ${isConnected ? 'bg-df-orange' : 'bg-df-gray group-hover:bg-df-white'}`}
                         style={{
-                          maskImage: `url(${imageUrl})`,
+                          maskImage: `url(${imagePath})`,
                           maskRepeat: 'no-repeat',
                           maskPosition: 'center',
                           maskSize: 'contain',
-                          WebkitMaskImage: `url(${imageUrl})`,
+                          WebkitMaskImage: `url(${imagePath})`,
                           WebkitMaskRepeat: 'no-repeat',
                           WebkitMaskPosition: 'center',
                           WebkitMaskSize: 'contain',
