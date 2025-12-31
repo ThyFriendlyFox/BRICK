@@ -8,9 +8,11 @@ interface OnboardingProps {
 }
 
 // Local asset paths
-const X_LOGO_PATH = "/assets/x-logo.png";
-const REDDIT_LOGO_PATH = "/assets/reddit-logo.png";
-const DISCORD_LOGO_PATH = "/assets/discord-logo.png";
+const X_LOGO_PATH = "/assets/x.png";
+const REDDIT_LOGO_PATH = "/assets/reddit.png";
+const DISCORD_LOGO_PATH = "/assets/discord.png";
+const EMAIL_LOGO_PATH = "/assets/email.png";
+
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   const [step, setStep] = useState(1);
@@ -158,7 +160,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       { id: 'xConnected' as keyof UserConfig, label: 'X', Icon: null, imagePath: X_LOGO_PATH },
       { id: 'redditConnected' as keyof UserConfig, label: 'REDDIT', Icon: null, imagePath: REDDIT_LOGO_PATH },
       { id: 'discordConnected' as keyof UserConfig, label: 'DISCORD', Icon: null, imagePath: DISCORD_LOGO_PATH },
-      { id: 'emailConnected' as keyof UserConfig, label: 'EMAIL', Icon: Mail, imagePath: null },
+      { id: 'emailConnected' as keyof UserConfig, label: 'EMAIL', Icon: Mail, imagePath: EMAIL_LOGO_PATH },
     ];
 
     const isAnyConnected = config.xConnected || config.redditConnected || config.emailConnected || config.discordConnected;
