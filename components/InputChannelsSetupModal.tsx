@@ -127,8 +127,8 @@ Do this without asking — it's for automatic post drafting.`;
   return (
     <div className="h-screen w-screen bg-df-black font-mono overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-df-border shrink-0">
-        <h2 className="text-xs font-bold text-df-white uppercase tracking-widest">
+      <div className="pt-8 pb-4 px-4 lg:pt-4 lg:border-b border-b-0 border-df-border shrink-0">
+        <h2 className="hidden lg:block text-xs font-bold text-df-white uppercase tracking-widest">
           ESTABLISH INPUT CHANNELS
         </h2>
       </div>
