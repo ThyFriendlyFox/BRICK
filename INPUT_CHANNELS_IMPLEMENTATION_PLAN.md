@@ -78,7 +78,7 @@ Create an MCP server that runs inside the BRICK app:
 Store code snippets for different coding agents:
 
 - `getConfigForAgent(agentType: AgentType): string` - Get config snippet
-- Agent types: Claude Desktop, Windsurf, Cursor, etc.
+- Agent types: Cursor, Claude Code, Gemini CLI, Google Antigravity
 - Each returns formatted JSON/YAML config showing how to add BRICK's MCP server
 
 **Example format:**
