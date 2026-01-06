@@ -54,34 +54,60 @@ flowchart TD
 
 Create an MCP server that runs inside the BRICK app:
 
-- `startMCPServer(port: number)` - Start MCP server on LAN
+- `startMCPServer(port: number)` - Start MCP server on LAN (supports both WebSocket and HTTP)
 - `stopMCPServer()` - Stop the server
-- `getServerUrl()` - Get server URL (for code snippet)
+- `getServerUrl()` - Get server URLs (returns both WebSocket `ws://` and HTTP `http://` URLs for code snippets)
 - `getServerStatus()` - Check if server is running
-- `onContextReceived(callback)` - Handle incoming context from coding agents
+- `onContextReceived(callback)` - Handle incoming summaries from coding agents
 
 **MCP Protocol Implementation:**
-- WebSocket server (using `ws` package or Capacitor HTTP server)
+- **Dual transport support:**
+  - WebSocket server (for Cursor) - `ws://YOUR_IP:3000`
+  - HTTP server (for Claude Code) - `http://YOUR_IP:3000/mcp`
 - Listen on configurable port (default: 3000)
-- Handle JSON-RPC requests from coding agents
-- Receive code context, reasoning, and technical decisions
-- Broadcast events to app when context received
+- Handle JSON-RPC requests from coding agents via both transports
+- **Expose MCP tool: `log_progress`**
+  - **Name**: `log_progress`
+  - **Description**: "Send a short, clear summary of what you just did or are about to do in the code. This will be used to generate social/media posts about your work."
+  - **Parameters**: 
+    ```json
+    {
+      "type": "object",
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "A concise, natural-language summary of the change or decision. E.g., 'Converted class components to functional components in Onboarding flow' or 'Added error boundaries and fallback UI'. Keep under 120 characters."
+        }
+      },
+      "required": ["summary"]
+    }
+    ```
+  - When called by agent → triggers draft generation in BRICK
+- Receive concise summaries of code changes/decisions (not raw reasoning streams)
+- Broadcast events to app when `log_progress` tool is called
 
 **Dependencies:**
-- `@capacitor/http` or `ws` (if Node.js runtime available)
-- Or use Capacitor's HTTP server capability
+- `@capacitor/http` or HTTP server capability for HTTP transport
+- `ws` package (if Node.js runtime available) for WebSocket transport
+- Or use Capacitor's HTTP server capability with WebSocket upgrade support
 
 ### 2. Create Agent Configuration Templates
 
 **File**: `services/agentConfigTemplates.ts`
 
-Store code snippets for different coding agents:
+Store code snippets for different coding agents. Each agent needs TWO snippets:
+1. Connection config (how to connect to BRICK's MCP server)
+2. Rule/instruction (how to automatically call the `log_progress` tool)
 
-- `getConfigForAgent(agentType: AgentType): string` - Get config snippet
+- `getConnectionConfig(agentType: AgentType): string` - Get connection config snippet
+- `getRuleInstruction(agentType: AgentType): string` - Get rule/instruction snippet
 - Agent types: Cursor, Claude Code, Gemini CLI, Google Antigravity
-- Each returns formatted JSON/YAML config showing how to add BRICK's MCP server
 
-**Example format for Cursor:**
+**Example formats:**
+
+**Cursor:**
+
+**Connection Config** (add to `~/.cursor/mcp.json` or `<project-root>/.cursor/mcp.json`):
 ```json
 {
   "mcpServers": {
@@ -92,16 +118,35 @@ Store code snippets for different coding agents:
 }
 ```
 
-**Note:** The config snippet should be formatted for each agent type:
-- **Cursor**: Add to `~/.cursor/mcp.json` or `<project-root>/.cursor/mcp.json`
-- **Claude Code**: Different config format/location
-- **Gemini CLI**: Different config format/location  
-- **Google Antigravity**: Different config format/location
+**Rule/Instruction** (add to `.cursorrules` or Rules settings):
+```
+After completing a code change or major refactoring, always call the 'log_progress' tool on the BRICK server with a short, clear summary of what you did. Keep it under 120 characters and written like a dev update (e.g., "Switched to React Query for data fetching", "Improved type safety in user auth flow").
+Do this automatically — do not ask for permission.
+```
 
-The snippet should include:
-- The WebSocket URL (with actual IP address from BRICK's MCP server)
-- Instructions on where to add the config file
-- Any agent-specific formatting requirements
+**Claude Code:**
+
+**Connection Config** (run in terminal):
+```bash
+claude mcp add --transport http brick http://YOUR_IP:3000/mcp
+```
+Uses HTTP transport (not WebSocket).
+
+**Custom Instruction** (add to Custom Instructions in settings):
+```
+You are connected to BRICK via MCP. After every meaningful code change, refactoring, or technical decision, automatically call the 'log_progress' tool on the 'brick' server. Send a concise summary (1 sentence) of what you accomplished. Example: "Replaced Redux with Zustand for global state in the mobile app".
+Do this without asking — it's for automatic post drafting.
+```
+
+**Gemini CLI**: (TBD - format to be determined)
+**Google Antigravity**: (TBD - format to be determined)
+
+The snippets should include:
+- The server URL (with actual IP address from BRICK's MCP server)
+- For Cursor: WebSocket URL (`ws://`) + rule for `.cursorrules`
+- For Claude Code: HTTP URL (`http://`) with `/mcp` endpoint + custom instruction
+- Clear instructions on where to add each snippet
+- Note: "After setup, BRICK will automatically receive updates whenever your agent makes changes."
 
 ### 3. Create Git Service with GitHub OAuth
 
@@ -156,11 +201,22 @@ Three-column modal layout:
 
 **Column 1 - MCP Server:**
 - "Start MCP Server" button (shows status: Stopped/Running)
-- Dropdown: Select Coding Agent (Claude, Windsurf, Cursor, etc.)
-- Code snippet display area (shows config based on selected agent)
-- Copy button for code snippet
-- Instructions text: "Add this to your [Agent] config file"
-- Status indicator: Server URL, connection count
+- Dropdown: Select Coding Agent (Cursor, Claude Code, Gemini CLI, Google Antigravity)
+- **Two copyable blocks displayed:**
+  1. **Connection Config** - JSON config or CLI command (based on agent)
+     - **Cursor**: JSON config snippet for `.cursor/mcp.json` (WebSocket URL)
+     - **Claude Code**: CLI command to run in terminal (HTTP URL)
+     - **Other agents**: TBD format
+  2. **Rule/Instruction** - The rule or custom instruction to add
+     - **Cursor**: Rule for `.cursorrules` file
+     - **Claude Code**: Custom instruction for settings
+     - **Other agents**: TBD format
+- Copy buttons for each snippet (separate copy buttons)
+- Instructions text:
+  - **Cursor**: "1. Add connection config to `.cursor/mcp.json` 2. Add rule to `.cursorrules`"
+  - **Claude Code**: "1. Run connection command in terminal 2. Add custom instruction to settings"
+- Status indicator: Server URL (shows both WebSocket and HTTP endpoints), connection count
+- Note: "After setup, BRICK will automatically receive updates whenever your agent makes changes."
 
 **Column 2 - Git Repository:**
 - Toggle/Radio: "GitHub" or "Local Folder"
@@ -237,9 +293,10 @@ Provide channel state and events throughout app:
 Replace `SAMPLE_CODE_SNIPPET` with real context:
 
 - Listen to InputChannelsContext
-- When MCP context received → use for draft generation
+- When MCP `log_progress` tool is called → receive summary → use for draft generation
 - When git commit → capture commit message + diff
 - When file changes → capture diff
+- Display context source: "New context from agent: 'Migrated to TypeScript strict mode'"
 
 ### 9. Update Settings Panel
 
@@ -292,7 +349,10 @@ types/
 2. **Column 1 (MCP):**
    - Click "Start MCP Server" → Server starts, shows URL
    - Select coding agent from dropdown
-   - Code snippet appears → User copies to their agent config
+   - **Two snippets appear:**
+     - Connection config → User copies and adds to agent config
+     - Rule/instruction → User copies and adds to agent rules/instructions
+   - After setup, agent will automatically call `log_progress` tool when making changes
 3. **Column 2 (Git):**
    - Choose "GitHub" or "Local Folder"
    - If GitHub → OAuth flow → Select repo
@@ -351,8 +411,8 @@ export interface InputChannelStatus {
 }
 
 export interface MCPContextEvent {
-  type: 'code-context' | 'reasoning' | 'decision';
-  content: string;
+  type: 'log_progress';
+  summary: string; // Concise summary from agent (under 120 characters)
   timestamp: number;
 }
 
@@ -392,7 +452,7 @@ export interface FileChangeEvent {
 
 **Option 1: Node.js Backend**
 - Run separate Node.js server process
-- BRICK app connects via WebSocket
+- BRICK app connects via HTTP/WebSocket (supports both transports)
 - Most flexible, can use full MCP SDK
 
 **Option 2: Capacitor HTTP Server**
