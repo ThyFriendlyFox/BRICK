@@ -5,12 +5,13 @@ import DraftsPanel from './components/DraftsPanel';
 import FeedbackPanel from './components/FeedbackPanel';
 import SettingsPanel from './components/SettingsPanel';
 import Onboarding from './components/Onboarding';
+import InputChannelsSetup from './components/InputChannelsSetupModal';
 import { Platform } from './types';
 
 export type ActivityTab = 'devflow' | 'settings';
 
 const App: React.FC = () => {
-  const [view, setView] = useState<'onboarding' | 'main'>('onboarding');
+  const [view, setView] = useState<'onboarding' | 'setup' | 'main'>('onboarding');
   const [activeActivity, setActiveActivity] = useState<ActivityTab>('devflow');
   const [activeTab, setActiveTab] = useState<'drafts' | 'feedback'>('drafts');
   const [activePlatform, setActivePlatform] = useState<Platform>(Platform.X);
@@ -44,7 +45,9 @@ const App: React.FC = () => {
                 BRICK needs to be initialized.
               </p>
               <button 
-                onClick={() => setIsIdeConnected(true)}
+                onClick={() => {
+                  setView('setup');
+                }}
                 className="w-full max-w-xs py-3 bg-df-orange text-df-black font-bold text-xs hover:bg-white transition-colors uppercase border border-df-orange"
               >
                 Establish Link
@@ -111,6 +114,18 @@ const App: React.FC = () => {
       <div className="h-screen w-screen bg-black font-mono overflow-hidden">
         <Onboarding onComplete={() => setView('main')} />
       </div>
+    );
+  }
+
+  if (view === 'setup') {
+    return (
+      <InputChannelsSetup
+        onClose={() => setView('main')}
+        onComplete={() => {
+          setIsIdeConnected(true);
+          setView('main');
+        }}
+      />
     );
   }
 
