@@ -8,6 +8,7 @@ import Onboarding from './components/Onboarding';
 import InputChannelsSetup from './components/InputChannelsSetupModal';
 import { Platform } from './types';
 import { handleOAuthCallback } from './services/oauthService';
+import { ConnectionProvider } from './contexts/ConnectionContext';
 
 export type ActivityTab = 'devflow' | 'settings';
 
@@ -26,7 +27,7 @@ const App: React.FC = () => {
   // State for Credits
   const [credits] = useState(85);
 
-  // Handle OAuth callbacks
+  // Handle OAuth callbacks - this runs FIRST before ConnectionContext checks
   useEffect(() => {
     const handleOAuthRedirect = async () => {
       // Check what environment we're in
@@ -52,16 +53,18 @@ const App: React.FC = () => {
           listener.remove();
         };
       } else {
-        // For web, check current URL
+        // For web, check current URL IMMEDIATELY (before ConnectionContext checks)
         const url = window.location.href;
         if (url.includes('/auth/') && url.includes('callback')) {
+          // Process callback FIRST, then ConnectionContext will refresh
           await processOAuthCallback(url);
         }
       }
     };
 
+    // Run immediately, don't wait
     handleOAuthRedirect();
-  }, []);
+  }, []); // Empty deps - only run once on mount
 
   const processOAuthCallback = async (url: string) => {
     try {
@@ -111,8 +114,25 @@ const App: React.FC = () => {
         platform = 'email';
       }
 
-      // Handle the callback
+      // Handle the callback - this stores the token
       await handleOAuthCallback(platform, code, state);
+
+      // Verify token was stored by checking immediately
+      const { getConnectionStatus } = await import('./services/oauthService');
+      let isNowConnected = await getConnectionStatus(platform);
+      
+      // If not connected, wait a bit and retry (token storage might be async)
+      if (!isNowConnected) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+        isNowConnected = await getConnectionStatus(platform);
+      }
+      
+      // Show success/failure message
+      if (isNowConnected) {
+        // Success - the alert will show below
+      } else {
+        alert(`Warning: ${platform.toUpperCase()} token may not have been saved. Check Settings to verify.`);
+      }
 
       // Close browser if in Capacitor (Electron handles this automatically)
       const isCapacitor = (window as any).Capacitor !== undefined;
@@ -125,14 +145,24 @@ const App: React.FC = () => {
         }
       }
 
-      // Clean up URL (for web)
-      if (!isCapacitor) {
+      // Clean up URL (for web) BEFORE dispatching event
+      const isElectron = (window as any).electronAPI !== undefined;
+      if (!isCapacitor && !isElectron) {
         window.history.replaceState({}, document.title, window.location.pathname);
       }
 
-      // Refresh the page or update state to reflect new connection
-      // The Onboarding component will check connection status on mount/step change
-      window.location.reload();
+      // Dispatch event to update global connection state (no reload needed!)
+      // Use a small delay to ensure token storage is fully complete
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('oauth-complete', { 
+          detail: { platform, connected: isNowConnected } 
+        }));
+        
+        // Show visual feedback
+        if (isNowConnected) {
+          alert(`${platform.toUpperCase()} account connected successfully!`);
+        }
+      }, 100);
     } catch (error) {
       console.error('Failed to process OAuth callback:', error);
       alert(`Failed to complete OAuth: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -222,28 +252,22 @@ const App: React.FC = () => {
     }
   };
 
-  if (view === 'onboarding') {
-    return (
-      <div className="h-screen w-screen bg-black font-mono overflow-hidden">
-        <Onboarding onComplete={() => setView('main')} />
-      </div>
-    );
-  }
-
-  if (view === 'setup') {
-    return (
-      <InputChannelsSetup
-        onClose={() => setView('main')}
-        onComplete={() => {
-          setIsIdeConnected(true);
-          setView('main');
-        }}
-      />
-    );
-  }
-
   return (
-    <div className="h-screen w-screen flex bg-[#1e1e1e] text-gray-400 font-mono overflow-hidden selection:bg-df-orange/30">
+    <ConnectionProvider>
+      {view === 'onboarding' ? (
+        <div className="h-screen w-screen bg-black font-mono overflow-hidden">
+          <Onboarding onComplete={() => setView('main')} />
+        </div>
+      ) : view === 'setup' ? (
+        <InputChannelsSetup
+          onClose={() => setView('main')}
+          onComplete={() => {
+            setIsIdeConnected(true);
+            setView('main');
+          }}
+        />
+      ) : (
+        <div className="h-screen w-screen flex bg-[#1e1e1e] text-gray-400 font-mono overflow-hidden selection:bg-df-orange/30">
       {/* 1. Activity Bar (Far Left) - Keep w-12 */}
       <div className="w-12 bg-[#181818] flex flex-col items-center py-4 shrink-0 border-r border-[#000]">
         
@@ -302,6 +326,8 @@ const App: React.FC = () => {
          </div>
       </div>
     </div>
+      )}
+    </ConnectionProvider>
   );
 };
 

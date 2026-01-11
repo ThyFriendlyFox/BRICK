@@ -4,6 +4,7 @@ import { Play, Check, Edit2 } from 'lucide-react';
 import { Draft, Platform } from '../types';
 import { generateDraftContent } from '../services/geminiService';
 import { SAMPLE_CODE_SNIPPET } from '../constants';
+import { useConnections } from '../contexts/ConnectionContext';
 
 interface DraftsPanelProps {
   activePlatform: Platform;
@@ -13,6 +14,7 @@ interface DraftsPanelProps {
 }
 
 const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlatform, triggerContext, toneContext }) => {
+  const { isConnected } = useConnections();
   const [currentDraft, setCurrentDraft] = useState<Draft | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [history, setHistory] = useState<Draft[]>([]);
@@ -134,6 +136,21 @@ const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlat
 
   const handlePost = () => {
     if (!currentDraft) return;
+
+    // Validate connection for the platform
+    const platformMap: Record<Platform, 'x' | 'reddit' | 'discord' | 'email' | null> = {
+      [Platform.ALL]: null,
+      [Platform.X]: 'x',
+      [Platform.REDDIT]: 'reddit',
+      [Platform.DISCORD]: 'discord',
+      [Platform.EMAIL]: 'email',
+    };
+
+    const platformKey = platformMap[currentDraft.platform];
+    if (platformKey && !isConnected(platformKey)) {
+      alert(`Please connect your ${currentDraft.platform} account first. Go to Settings to connect.`);
+      return;
+    }
     const postedDraft = { ...currentDraft, posted: true };
     setHistory(prev => [postedDraft, ...prev]);
     setCurrentDraft(null);

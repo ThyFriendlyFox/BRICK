@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowRight, GitPullRequest, Users, Zap, Square, Mail, MessageCircle } from 'lucide-react';
 import { UserConfig } from '../types';
-import { initiateOAuth, getConnectionStatus } from '../services/oauthService';
+import { initiateOAuth } from '../services/oauthService';
+import { useConnections } from '../contexts/ConnectionContext';
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -16,39 +17,69 @@ const EMAIL_LOGO_PATH = "/assets/email.png";
 
 
 const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
-  const [step, setStep] = useState(1);
+  const { connections, hasAnyConnection, refreshConnections } = useConnections();
+  
+  // Restore step from localStorage or determine from connection status
+  const [step, setStep] = useState(() => {
+    const stored = localStorage.getItem('onboarding_step');
+    if (stored) {
+      return parseInt(stored, 10);
+    }
+    // If any platform is connected, start at step 5
+    return 1;
+  });
+  
   const [config, setConfig] = useState<UserConfig>({
-    xConnected: false,
-    redditConnected: false,
-    emailConnected: false,
-    discordConnected: false,
+    xConnected: connections.x,
+    redditConnected: connections.reddit,
+    emailConnected: connections.email,
+    discordConnected: connections.discord,
     setupComplete: false,
   });
   const [connecting, setConnecting] = useState<string | null>(null);
 
-  // Check connection status on mount and when step changes
+  // Sync local config when global connections change
   useEffect(() => {
-    const checkConnections = async () => {
-      const [xConnected, redditConnected, discordConnected, emailConnected] = await Promise.all([
-        getConnectionStatus('x'),
-        getConnectionStatus('reddit'),
-        getConnectionStatus('discord'),
-        getConnectionStatus('email'),
-      ]);
+    setConfig((prev) => ({
+      ...prev,
+      xConnected: connections.x,
+      redditConnected: connections.reddit,
+      emailConnected: connections.email,
+      discordConnected: connections.discord,
+    }));
+  }, [connections]);
 
-      setConfig((prev) => ({
-        ...prev,
-        xConnected,
-        redditConnected,
-        discordConnected,
-        emailConnected,
-      }));
+  // Also listen for OAuth complete events to refresh immediately
+  useEffect(() => {
+    const handleOAuthComplete = async () => {
+      // Small delay to ensure token storage is complete
+      await new Promise(resolve => setTimeout(resolve, 200));
+      // Force refresh connections when OAuth completes
+      await refreshConnections();
     };
 
-    if (step === 5) {
-      checkConnections();
+    window.addEventListener('oauth-complete', handleOAuthComplete);
+    return () => window.removeEventListener('oauth-complete', handleOAuthComplete);
+  }, [refreshConnections]);
+
+  // Smart step detection: if any connected, jump to step 5
+  useEffect(() => {
+    if (hasAnyConnection() && step < 5) {
+      setStep(5);
+      localStorage.setItem('onboarding_step', '5');
     }
+  }, [hasAnyConnection, step]);
+
+  // Save step to storage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('onboarding_step', step.toString());
   }, [step]);
+
+  // Helper function to update step and save to localStorage
+  const goToStep = (newStep: number) => {
+    setStep(newStep);
+    localStorage.setItem('onboarding_step', newStep.toString());
+  };
 
   const handleConnect = async (key: keyof UserConfig) => {
     if (config[key]) return;
@@ -98,7 +129,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
           </p>
        </div>
        <button 
-         onClick={() => setStep(2)}
+         onClick={() => goToStep(2)}
          className="w-full py-6 bg-df-white text-black font-bold hover:bg-df-orange transition-colors flex items-center justify-center gap-2 group tracking-widest text-sm"
        >
          INITIATE <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform"/>
@@ -135,8 +166,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       </div>
 
       <div className="flex border-t border-df-border">
-          <button onClick={() => setStep(1)} className="w-1/3 py-6 text-df-gray hover:text-white border-r border-df-border text-xs font-bold uppercase">Back</button>
-          <button onClick={() => setStep(3)} className="flex-grow py-6 bg-df-white text-black hover:bg-df-gray text-xs font-bold uppercase flex items-center justify-center gap-2">Next <ArrowRight size={14}/></button>
+          <button onClick={() => goToStep(1)} className="w-1/3 py-6 text-df-gray hover:text-white border-r border-df-border text-xs font-bold uppercase">Back</button>
+          <button onClick={() => goToStep(3)} className="flex-grow py-6 bg-df-white text-black hover:bg-df-gray text-xs font-bold uppercase flex items-center justify-center gap-2">Next <ArrowRight size={14}/></button>
       </div>
     </div>
   );
@@ -171,8 +202,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       </div>
 
       <div className="flex border-t border-df-border">
-          <button onClick={() => setStep(2)} className="w-1/3 py-6 text-df-gray hover:text-white border-r border-df-border text-xs font-bold uppercase">Back</button>
-          <button onClick={() => setStep(4)} className="flex-grow py-6 bg-df-white text-black hover:bg-df-gray text-xs font-bold uppercase flex items-center justify-center gap-2">Next <ArrowRight size={14}/></button>
+          <button onClick={() => goToStep(2)} className="w-1/3 py-6 text-df-gray hover:text-white border-r border-df-border text-xs font-bold uppercase">Back</button>
+          <button onClick={() => goToStep(4)} className="flex-grow py-6 bg-df-white text-black hover:bg-df-gray text-xs font-bold uppercase flex items-center justify-center gap-2">Next <ArrowRight size={14}/></button>
       </div>
     </div>
   );
@@ -196,8 +227,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
       </div>
 
       <div className="flex border-t border-df-border">
-          <button onClick={() => setStep(3)} className="w-1/3 py-6 text-df-gray hover:text-white border-r border-df-border text-xs font-bold uppercase">Back</button>
-          <button onClick={() => setStep(5)} className="flex-grow py-6 bg-df-white text-black hover:bg-df-gray text-xs font-bold uppercase flex items-center justify-center gap-2">Connect <ArrowRight size={14}/></button>
+          <button onClick={() => goToStep(3)} className="w-1/3 py-6 text-df-gray hover:text-white border-r border-df-border text-xs font-bold uppercase">Back</button>
+          <button onClick={() => goToStep(5)} className="flex-grow py-6 bg-df-white text-black hover:bg-df-gray text-xs font-bold uppercase flex items-center justify-center gap-2">Connect <ArrowRight size={14}/></button>
       </div>
     </div>
   );
@@ -281,7 +312,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
 
         <div className="flex border-t border-df-border">
           <button 
-            onClick={() => setStep(4)} 
+            onClick={() => goToStep(4)} 
             className="w-1/3 py-6 text-df-gray hover:text-white border-r border-df-border text-xs font-bold uppercase"
           >
             Back

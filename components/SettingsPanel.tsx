@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { Shield, Zap, Globe, Cpu, Link, Lock, EyeOff, Mic, Upload, Check, RefreshCw, Layers } from 'lucide-react';
+import { useConnections } from '../contexts/ConnectionContext';
 
 interface SettingsPanelProps {
   toneContext: string;
@@ -8,6 +9,7 @@ interface SettingsPanelProps {
 }
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneContext }) => {
+  const { connections } = useConnections();
   const [analyzed, setAnalyzed] = useState(false);
   const [protocols, setProtocols] = useState({
     watcher: true,
@@ -126,7 +128,42 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
           </div>
         </section>
 
-        {/* CONNECTION SECTION */}
+        {/* OUTBOUND CHANNELS SECTION */}
+        <section>
+          <h3 className="text-[10px] font-bold text-df-orange uppercase mb-4 flex items-center gap-2">
+            <Link size={12} /> OUTBOUND CHANNELS
+          </h3>
+          <div className="space-y-3">
+            <div className="bg-[#111] border border-df-border p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-df-white font-bold uppercase">X</span>
+                <span className={`text-[10px] font-bold uppercase ${connections.x ? 'text-green-500' : 'text-df-gray'}`}>
+                  {connections.x ? 'CONNECTED' : 'NOT CONNECTED'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-df-white font-bold uppercase">Reddit</span>
+                <span className={`text-[10px] font-bold uppercase ${connections.reddit ? 'text-green-500' : 'text-df-gray'}`}>
+                  {connections.reddit ? 'CONNECTED' : 'NOT CONNECTED'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-df-white font-bold uppercase">Discord</span>
+                <span className={`text-[10px] font-bold uppercase ${connections.discord ? 'text-green-500' : 'text-df-gray'}`}>
+                  {connections.discord ? 'CONNECTED' : 'NOT CONNECTED'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-df-white font-bold uppercase">Email</span>
+                <span className={`text-[10px] font-bold uppercase ${connections.email ? 'text-green-500' : 'text-df-gray'}`}>
+                  {connections.email ? 'CONNECTED' : 'NOT CONNECTED'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* MCP CONNECTION SECTION */}
         <section>
           <h3 className="text-[10px] font-bold text-df-orange uppercase mb-4 flex items-center gap-2">
             <Link size={12} /> MCP CONNECTION
