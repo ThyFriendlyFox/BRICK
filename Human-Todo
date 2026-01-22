@@ -1,0 +1,2 @@
+create global components for input channels and output channels, we have the feedback channels already globally implemented
+set up electronjs to turn this into a desktop app

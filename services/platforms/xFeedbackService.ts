@@ -4,7 +4,7 @@
  */
 
 import { FeedbackItem, Platform } from '../../types';
-import { ensureValidXToken, getXUserProfile } from '../xOAuthService';
+import { ensureValidXToken, getXUserProfile, getCachedUserProfile } from '../xOAuthService';
 import { FeedbackFetchOptions } from '../feedbackService';
 import { isNativePlatform } from '../../utils/platform';
 
@@ -71,9 +71,16 @@ function classifyFeedbackType(text: string): 'question' | 'bug' | 'request' | 'p
 async function fetchMentions(options: FeedbackFetchOptions = {}): Promise<any> {
   const accessToken = await ensureValidXToken();
   
-  // Get user ID first
-  const userProfile = await getXUserProfile();
-  const userId = userProfile.data?.id;
+  // Get user ID from cache first, fallback to API if needed
+  let userId: string | undefined;
+  const cachedProfile = getCachedUserProfile();
+  
+  if (cachedProfile) {
+    userId = cachedProfile.id;
+  } else {
+    const userProfile = await getXUserProfile();
+    userId = userProfile.data?.id;
+  }
   
   if (!userId) {
     throw new Error('Could not retrieve user ID');
@@ -143,10 +150,20 @@ async function fetchMentions(options: FeedbackFetchOptions = {}): Promise<any> {
 async function fetchReplies(options: FeedbackFetchOptions = {}): Promise<any> {
   const accessToken = await ensureValidXToken();
   
-  // Get user ID
-  const userProfile = await getXUserProfile();
-  const userId = userProfile.data?.id;
-  const username = userProfile.data?.username;
+  // Get user ID and username from cache first, fallback to API if needed
+  let userId: string | undefined;
+  let username: string | undefined;
+  
+  const cachedProfile = getCachedUserProfile();
+  
+  if (cachedProfile) {
+    userId = cachedProfile.id;
+    username = cachedProfile.username;
+  } else {
+    const userProfile = await getXUserProfile();
+    userId = userProfile.data?.id;
+    username = userProfile.data?.username;
+  }
   
   if (!userId || !username) {
     throw new Error('Could not retrieve user ID or username');

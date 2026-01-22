@@ -5,6 +5,7 @@ import { Draft, Platform } from '../types';
 import { generateDraftContent } from '../services/geminiService';
 import { SAMPLE_CODE_SNIPPET } from '../constants';
 import { useConnections } from '../contexts/ConnectionContext';
+import { postTweet, postTweetThread } from '../services/xOAuthService';
 
 interface DraftsPanelProps {
   activePlatform: Platform;
@@ -17,6 +18,7 @@ const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlat
   const { isConnected } = useConnections();
   const [currentDraft, setCurrentDraft] = useState<Draft | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isPosting, setIsPosting] = useState(false);
   const [history, setHistory] = useState<Draft[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
@@ -134,7 +136,7 @@ const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlat
     setIsGenerating(false);
   };
 
-  const handlePost = () => {
+  const handlePost = async () => {
     if (!currentDraft) return;
 
     // Validate connection for the platform
@@ -151,9 +153,57 @@ const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlat
       alert(`Please connect your ${currentDraft.platform} account first. Go to Settings to connect.`);
       return;
     }
-    const postedDraft = { ...currentDraft, posted: true };
-    setHistory(prev => [postedDraft, ...prev]);
-    setCurrentDraft(null);
+
+    setIsPosting(true);
+
+    try {
+      // Handle X/Twitter posting
+      if (currentDraft.platform === Platform.X) {
+        // Check if content contains double newlines (thread indicator)
+        // Split by double newlines and filter out empty tweets
+        const threadTweets = currentDraft.content
+          .split(/\n\n+/)
+          .map(t => t.trim())
+          .filter(t => t.length > 0);
+        
+        if (threadTweets.length > 1) {
+          // Post as thread
+          const result = await postTweetThread(threadTweets);
+          console.log(`Posted thread with ${result.tweets.length} tweets:`, result);
+          
+          // Log rate limit info if available
+          if (result.rateLimit) {
+            console.log(`Rate limit: ${result.rateLimit.remaining}/${result.rateLimit.limit} remaining, resets at ${new Date(result.rateLimit.reset * 1000).toLocaleTimeString()}`);
+          }
+        } else {
+          // Post as single tweet
+          const result = await postTweet(currentDraft.content.trim());
+          console.log('Posted tweet:', result);
+          
+          // Log rate limit info if available
+          if (result.rateLimit) {
+            console.log(`Rate limit: ${result.rateLimit.remaining}/${result.rateLimit.limit} remaining, resets at ${new Date(result.rateLimit.reset * 1000).toLocaleTimeString()}`);
+          }
+        }
+      } else {
+        // TODO: Implement posting for other platforms (Reddit, Discord, Email)
+        console.warn(`Posting to ${currentDraft.platform} not yet implemented`);
+        alert(`Posting to ${currentDraft.platform} is not yet implemented.`);
+        setIsPosting(false);
+        return;
+      }
+
+      // Mark as posted and add to history
+      const postedDraft = { ...currentDraft, posted: true };
+      setHistory(prev => [postedDraft, ...prev]);
+      setCurrentDraft(null);
+    } catch (error) {
+      console.error('Failed to post:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      alert(`Failed to post: ${errorMessage}`);
+    } finally {
+      setIsPosting(false);
+    }
   };
 
   const loadFromHistory = (draft: Draft) => {
@@ -334,15 +384,15 @@ const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlat
 
         <button 
           onClick={handlePost}
-          disabled={!currentDraft}
+          disabled={!currentDraft || isPosting}
           className={`
             h-full px-8 text-sm font-bold transition-all
-            ${currentDraft 
+            ${currentDraft && !isPosting
               ? 'bg-df-orange text-df-black hover:bg-white' 
               : 'bg-df-black text-df-gray cursor-not-allowed border-l border-df-border'}
           `}
         >
-          {currentDraft ? 'POST' : 'WAITING'}
+          {isPosting ? 'POSTING...' : currentDraft ? 'POST' : 'WAITING'}
         </button>
       </div>
 

@@ -7,6 +7,18 @@ import { generateCodeVerifier, generateCodeChallenge, generateState } from '../u
 import { storeOAuthState, getOAuthState, removeOAuthState, storeTokens, getTokens, OAuthTokens } from './tokenStorageService';
 import { isElectron, isNativePlatform } from '../utils/platform';
 
+// Rate limit information interface
+export interface RateLimitInfo {
+  limit: number;
+  remaining: number;
+  reset: number; // Unix timestamp in seconds
+}
+
+// Cached user profile to avoid redundant API calls
+let cachedUserProfile: { id: string; username: string; name: string; profile_image_url?: string } | null = null;
+let profileCacheExpiry: number = 0;
+const PROFILE_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 // X/Twitter OAuth endpoints
 const TWITTER_AUTH_URL = 'https://twitter.com/i/oauth2/authorize';
 
@@ -63,7 +75,7 @@ export async function initiateXOAuth(): Promise<void> {
 
   // Build authorization URL
   const redirectUri = getRedirectUri();
-  const scopes = ['tweet.read', 'tweet.write', 'users.read', 'offline.access'];
+  const scopes = ['tweet.read', 'tweet.write', 'users.read', 'offline.access', 'media.write'];
   
   const params = new URLSearchParams({
     response_type: 'code',
@@ -228,9 +240,35 @@ export async function ensureValidXToken(): Promise<string> {
 }
 
 /**
- * Get X user profile
+ * Parse rate limit headers from X API response
  */
-export async function getXUserProfile(): Promise<any> {
+function parseRateLimitHeaders(response: Response): RateLimitInfo | null {
+  const limit = response.headers.get('x-rate-limit-limit');
+  const remaining = response.headers.get('x-rate-limit-remaining');
+  const reset = response.headers.get('x-rate-limit-reset');
+
+  if (limit && remaining && reset) {
+    return {
+      limit: parseInt(limit, 10),
+      remaining: parseInt(remaining, 10),
+      reset: parseInt(reset, 10),
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Get X user profile (with caching)
+ */
+export async function getXUserProfile(forceRefresh: boolean = false): Promise<any> {
+  // Return cached profile if still valid
+  if (!forceRefresh && cachedUserProfile && Date.now() < profileCacheExpiry) {
+    return {
+      data: cachedUserProfile,
+    };
+  }
+
   const accessToken = await ensureValidXToken();
 
   const response = await fetch(`${getApiUrl('/2/users/me')}?user.fields=id,name,username,profile_image_url`, {
@@ -243,13 +281,108 @@ export async function getXUserProfile(): Promise<any> {
     throw new Error(`Failed to fetch user profile: ${response.statusText}`);
   }
 
-  return await response.json();
+  const data = await response.json();
+  
+  // Cache the profile data
+  if (data.data) {
+    cachedUserProfile = {
+      id: data.data.id,
+      username: data.data.username,
+      name: data.data.name,
+      profile_image_url: data.data.profile_image_url,
+    };
+    profileCacheExpiry = Date.now() + PROFILE_CACHE_DURATION;
+  }
+
+  return data;
+}
+
+/**
+ * Get cached user profile (lightweight, no API call)
+ */
+export function getCachedUserProfile(): { id: string; username: string; name: string } | null {
+  return cachedUserProfile;
+}
+
+/**
+ * Clear user profile cache (useful when disconnecting)
+ */
+export function clearUserProfileCache(): void {
+  cachedUserProfile = null;
+  profileCacheExpiry = 0;
+}
+
+/**
+ * Upload media to X (images, videos, etc.)
+ * Returns media_id that can be used in postTweet
+ */
+export async function uploadMedia(file: File | Blob, mediaType: 'image' | 'video' = 'image'): Promise<string> {
+  const accessToken = await ensureValidXToken();
+
+  // Step 1: Initialize media upload
+  const formData = new FormData();
+  formData.append('media', file);
+  formData.append('media_category', mediaType === 'image' ? 'tweet_image' : 'tweet_video');
+
+  const initResponse = await fetch(getApiUrl('/1.1/media/upload.json'), {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: formData,
+  });
+
+  if (!initResponse.ok) {
+    const error = await initResponse.text();
+    throw new Error(`Failed to upload media: ${error}`);
+  }
+
+  const mediaData = await initResponse.json();
+  
+  // For videos, we might need to check processing status
+  if (mediaType === 'video' && mediaData.processing_info) {
+    // Poll for processing completion
+    const checkStatus = async (): Promise<string> => {
+      const statusResponse = await fetch(
+        `${getApiUrl('/1.1/media/upload.json')}?command=STATUS&media_id=${mediaData.media_id_string}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+      
+      if (!statusResponse.ok) {
+        throw new Error('Failed to check media status');
+      }
+      
+      const statusData = await statusResponse.json();
+      
+      if (statusData.processing_info.state === 'succeeded') {
+        return mediaData.media_id_string;
+      } else if (statusData.processing_info.state === 'failed') {
+        throw new Error('Media processing failed');
+      } else {
+        // Still processing, wait and retry
+        await new Promise(resolve => setTimeout(resolve, statusData.processing_info.check_after_secs * 1000));
+        return checkStatus();
+      }
+    };
+    
+    return checkStatus();
+  }
+
+  return mediaData.media_id_string;
 }
 
 /**
  * Post a tweet to X
+ * Returns tweet data including rate limit info
  */
-export async function postTweet(text: string, mediaIds?: string[]): Promise<any> {
+export async function postTweet(
+  text: string, 
+  mediaIds?: string[]
+): Promise<{ data: any; rateLimit?: RateLimitInfo }> {
   const accessToken = await ensureValidXToken();
 
   const body: any = { text };
@@ -268,10 +401,90 @@ export async function postTweet(text: string, mediaIds?: string[]): Promise<any>
 
   if (!response.ok) {
     const error = await response.text();
+    const rateLimit = parseRateLimitHeaders(response);
+    
+    // Check for rate limit error
+    if (response.status === 429) {
+      const resetTime = rateLimit?.reset ? new Date(rateLimit.reset * 1000).toLocaleTimeString() : 'soon';
+      throw new Error(`Rate limit exceeded. Try again after ${resetTime}. Remaining: ${rateLimit?.remaining || 0}`);
+    }
+    
     throw new Error(`Failed to post tweet: ${error}`);
   }
 
-  return await response.json();
+  const data = await response.json();
+  const rateLimit = parseRateLimitHeaders(response);
+
+  return { data, rateLimit };
+}
+
+/**
+ * Post a thread (multiple connected tweets) to X
+ * Splits content by double newlines or automatically if content is too long
+ */
+export async function postTweetThread(
+  tweets: string[],
+  mediaIds?: string[][]
+): Promise<{ tweets: any[]; rateLimit?: RateLimitInfo }> {
+  const accessToken = await ensureValidXToken();
+  const postedTweets: any[] = [];
+  let lastTweetId: string | undefined;
+  let rateLimit: RateLimitInfo | undefined;
+
+  for (let i = 0; i < tweets.length; i++) {
+    const tweetText = tweets[i];
+    const body: any = { text: tweetText };
+    
+    // Add reply reference if this is not the first tweet
+    if (lastTweetId) {
+      body.reply = { in_reply_to_tweet_id: lastTweetId };
+    }
+    
+    // Add media if provided
+    if (mediaIds && mediaIds[i] && mediaIds[i].length > 0) {
+      body.media = { media_ids: mediaIds[i] };
+    }
+
+    const response = await fetch(getApiUrl('/2/tweets'), {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      const parsedRateLimit = parseRateLimitHeaders(response);
+      
+      if (response.status === 429) {
+        const resetTime = parsedRateLimit?.reset ? new Date(parsedRateLimit.reset * 1000).toLocaleTimeString() : 'soon';
+        throw new Error(`Rate limit exceeded while posting thread. Try again after ${resetTime}. Posted ${postedTweets.length} of ${tweets.length} tweets.`);
+      }
+      
+      throw new Error(`Failed to post tweet ${i + 1} of ${tweets.length}: ${error}`);
+    }
+
+    const tweetData = await response.json();
+    const parsedRateLimit = parseRateLimitHeaders(response);
+    
+    if (parsedRateLimit) {
+      rateLimit = parsedRateLimit;
+    }
+    
+    if (tweetData.data?.id) {
+      lastTweetId = tweetData.data.id;
+      postedTweets.push(tweetData.data);
+    }
+
+    // Small delay between tweets to avoid rate limits
+    if (i < tweets.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+
+  return { tweets: postedTweets, rateLimit };
 }
 
 /**
@@ -292,5 +505,6 @@ export async function isXConnected(): Promise<boolean> {
 export async function disconnectX(): Promise<void> {
   const { removeTokens } = await import('./tokenStorageService');
   await removeTokens('x');
+  clearUserProfileCache();
 }
 
