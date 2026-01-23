@@ -28,6 +28,10 @@ ios
 android
 .capacitor
 
+# Electron builds
+release
+dist_electron
+
 # Environment variables
 .env
 .env.local
