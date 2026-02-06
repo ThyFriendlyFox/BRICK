@@ -1,4 +1,4 @@
-# DevFlow Studio
+# BRICK
 
 **Code. Share. Listen.**  
 *A brutalist, flow-preserving tool for building in public directly from your IDE.*
