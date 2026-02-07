@@ -1,15 +1,19 @@
 
-import React, { useState } from 'react';
-import { Shield, Zap, Globe, Cpu, Link, Lock, EyeOff, Mic, Upload, Check, RefreshCw, Layers } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, Zap, Globe, Cpu, Link, Lock, EyeOff, Mic, Upload, Check, RefreshCw, Layers, Server, GitBranch, Folder, RotateCcw } from 'lucide-react';
 import { useConnections } from '../contexts/ConnectionContext';
+import { getMcpStatus, isMcpAvailable, type McpStatus } from '../services/mcpServerService';
+import { getGitStatus, isGitAvailable, type GitStatus } from '../services/gitWatcherService';
+import { getWatcherStatus, isWatcherAvailable, type WatcherStatus } from '../services/fileWatcherService';
 
 interface SettingsPanelProps {
   toneContext: string;
   setToneContext: (s: string) => void;
   onNavigateToOnboarding?: () => void;
+  onOpenInputChannels?: () => void;
 }
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneContext, onNavigateToOnboarding }) => {
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneContext, onNavigateToOnboarding, onOpenInputChannels }) => {
   const { connections } = useConnections();
   const [analyzed, setAnalyzed] = useState(false);
   const [protocols, setProtocols] = useState({
@@ -18,8 +22,24 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
     mcp: true
   });
 
+  // Inbound channel status
+  const [mcpStatus, setMcpStatus] = useState<McpStatus>({ running: false, port: null, ip: null, activeSessions: 0, totalEvents: 0 });
+  const [gitStatus, setGitStatus] = useState<GitStatus>({ watching: false, repoPath: null, branch: null, totalCommits: 0 });
+  const [watcherStatus, setWatcherStatus] = useState<WatcherStatus>({ watching: false, folders: [], totalEvents: 0 });
+
+  // Poll inbound channel status
+  useEffect(() => {
+    const refresh = async () => {
+      if (isMcpAvailable()) getMcpStatus().then(setMcpStatus).catch(() => {});
+      if (isGitAvailable()) getGitStatus().then(setGitStatus).catch(() => {});
+      if (isWatcherAvailable()) getWatcherStatus().then(setWatcherStatus).catch(() => {});
+    };
+    refresh();
+    const interval = setInterval(refresh, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleSimulateImport = () => {
-    // Simulate importing existing tweets
     const mockPreviousPosts = 
 `1. "Just pushed a fix for the memory leak. Rust ownership rules are a harsh mistress but fair."
 2. "Shipping the brutalist redesign today. No gradients, just vibes."
@@ -39,6 +59,22 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
     setProtocols(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const handleClearCache = () => {
+    // Clear all BRICK-related localStorage items (preserve onboarding state)
+    const keysToKeep = ['onboarding_complete', 'onboarding_step'];
+    const allKeys = Object.keys(localStorage);
+    for (const key of allKeys) {
+      if (!keysToKeep.includes(key)) {
+        localStorage.removeItem(key);
+      }
+    }
+    // Clear sessionStorage
+    sessionStorage.clear();
+    alert('Local cache cleared. Tokens and saved state have been removed.');
+  };
+
+  const inboundActive = mcpStatus.running || gitStatus.watching || watcherStatus.folders.length > 0;
+
   return (
     <div className="flex flex-col h-full bg-df-black">
       <div className="p-4 border-b border-df-border flex justify-between items-center">
@@ -46,10 +82,82 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
       </div>
 
       <div className="flex-grow overflow-y-auto p-4 space-y-8">
+
+        {/* INBOUND CHANNELS SECTION */}
+        <section>
+          <button
+            onClick={onOpenInputChannels}
+            className="text-[10px] font-bold text-df-orange uppercase mb-4 flex items-center gap-2 hover:text-df-white transition-colors cursor-pointer group"
+          >
+            <Layers size={12} /> INBOUND CHANNELS
+          </button>
+          <div className="space-y-3">
+            <div className="bg-[#111] border border-df-border p-3 space-y-3">
+              {/* MCP */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Server size={10} className={mcpStatus.running ? 'text-df-orange' : 'text-df-gray'} />
+                  <span className="text-xs text-df-white font-bold uppercase">MCP Server</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {mcpStatus.running && (
+                    <span className="text-[8px] text-df-gray">{mcpStatus.activeSessions} session(s)</span>
+                  )}
+                  <span className={`text-[10px] font-bold uppercase ${mcpStatus.running ? 'text-green-500' : 'text-df-gray'}`}>
+                    {mcpStatus.running ? 'RUNNING' : 'STOPPED'}
+                  </span>
+                  {mcpStatus.running && <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />}
+                </div>
+              </div>
+
+              {/* Git */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <GitBranch size={10} className={gitStatus.watching ? 'text-df-orange' : 'text-df-gray'} />
+                  <span className="text-xs text-df-white font-bold uppercase">Git Watcher</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {gitStatus.watching && gitStatus.branch && (
+                    <span className="text-[8px] text-df-gray">{gitStatus.repoPath?.split('/').pop()} ({gitStatus.branch})</span>
+                  )}
+                  <span className={`text-[10px] font-bold uppercase ${gitStatus.watching ? 'text-green-500' : 'text-df-gray'}`}>
+                    {gitStatus.watching ? 'WATCHING' : 'INACTIVE'}
+                  </span>
+                  {gitStatus.watching && <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />}
+                </div>
+              </div>
+
+              {/* File Watcher */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Folder size={10} className={watcherStatus.folders.length > 0 ? 'text-df-orange' : 'text-df-gray'} />
+                  <span className="text-xs text-df-white font-bold uppercase">File Watcher</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {watcherStatus.folders.length > 0 && (
+                    <span className="text-[8px] text-df-gray">{watcherStatus.folders.length} folder(s)</span>
+                  )}
+                  <span className={`text-[10px] font-bold uppercase ${watcherStatus.folders.length > 0 ? 'text-green-500' : 'text-df-gray'}`}>
+                    {watcherStatus.folders.length > 0 ? 'ACTIVE' : 'INACTIVE'}
+                  </span>
+                  {watcherStatus.folders.length > 0 && <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={onOpenInputChannels}
+              className="w-full py-2 border border-df-orange text-[10px] text-df-orange hover:bg-df-orange hover:text-df-black transition-colors uppercase font-bold"
+            >
+              Establish Inbound Link
+            </button>
+          </div>
+        </section>
+
         {/* SYNC PROTOCOLS SECTION */}
         <section>
           <h3 className="text-[10px] font-bold text-df-orange uppercase mb-4 flex items-center gap-2">
-            <Layers size={12} /> SYNC PROTOCOLS
+            <Zap size={12} /> SYNC PROTOCOLS
           </h3>
           <div className="space-y-3">
              <div className="bg-[#111] border border-df-border p-3 space-y-4">
@@ -133,7 +241,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
         <section>
           <button
             onClick={onNavigateToOnboarding}
-            className="text-[10px] font-bold text-df-orange uppercase mb-4 flex items-center gap-2 hover:text-df-white transition-colors cursor-pointer"
+            className="text-[10px] font-bold text-df-orange uppercase mb-4 flex items-center gap-2 hover:text-df-white transition-colors cursor-pointer group"
           >
             <Link size={12} /> OUTBOUND CHANNELS
           </button>
@@ -141,53 +249,47 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
             <div className="bg-[#111] border border-df-border p-3 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-df-white font-bold uppercase">X</span>
-                <span className={`text-[10px] font-bold uppercase ${connections.x ? 'text-green-500' : 'text-df-gray'}`}>
-                  {connections.x ? 'CONNECTED' : 'NOT CONNECTED'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-bold uppercase ${connections.x ? 'text-green-500' : 'text-df-gray'}`}>
+                    {connections.x ? 'CONNECTED' : 'NOT CONNECTED'}
+                  </span>
+                  {connections.x && <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />}
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-df-white font-bold uppercase">Reddit</span>
-                <span className={`text-[10px] font-bold uppercase ${connections.reddit ? 'text-green-500' : 'text-df-gray'}`}>
-                  {connections.reddit ? 'CONNECTED' : 'NOT CONNECTED'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-bold uppercase ${connections.reddit ? 'text-green-500' : 'text-df-gray'}`}>
+                    {connections.reddit ? 'CONNECTED' : 'NOT CONNECTED'}
+                  </span>
+                  {connections.reddit && <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />}
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-df-white font-bold uppercase">Discord</span>
-                <span className={`text-[10px] font-bold uppercase ${connections.discord ? 'text-green-500' : 'text-df-gray'}`}>
-                  {connections.discord ? 'CONNECTED' : 'NOT CONNECTED'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-bold uppercase ${connections.discord ? 'text-green-500' : 'text-df-gray'}`}>
+                    {connections.discord ? 'CONNECTED' : 'NOT CONNECTED'}
+                  </span>
+                  {connections.discord && <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />}
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-df-white font-bold uppercase">Email</span>
-                <span className={`text-[10px] font-bold uppercase ${connections.email ? 'text-green-500' : 'text-df-gray'}`}>
-                  {connections.email ? 'CONNECTED' : 'NOT CONNECTED'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-bold uppercase ${connections.email ? 'text-green-500' : 'text-df-gray'}`}>
+                    {connections.email ? 'CONNECTED' : 'NOT CONNECTED'}
+                  </span>
+                  {connections.email && <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />}
+                </div>
               </div>
             </div>
-          </div>
-        </section>
-
-        {/* MCP CONNECTION SECTION */}
-        <section>
-          <h3 className="text-[10px] font-bold text-df-orange uppercase mb-4 flex items-center gap-2">
-            <Link size={12} /> MCP CONNECTION
-          </h3>
-          <div className="space-y-4">
-            <div className="p-3 bg-[#111] border border-df-border">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs text-df-white font-bold">Local Host Port</span>
-                <span className="text-[10px] text-green-500">CONNECTED</span>
-              </div>
-              <code className="text-[10px] text-df-gray">http://localhost:3000/mcp</code>
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-[10px] text-df-gray uppercase">Agent Permission Level</label>
-              <select className="bg-black border border-df-border text-xs text-df-white p-2 outline-none focus:border-df-orange transition-colors">
-                <option>READ_ONLY (SAMPLED)</option>
-                <option>FULL_OBSERVATION</option>
-                <option>INTERACTIVE</option>
-              </select>
-            </div>
+            <button
+              onClick={onNavigateToOnboarding}
+              className="w-full py-2 border border-df-orange text-[10px] text-df-orange hover:bg-df-orange hover:text-df-black transition-colors uppercase font-bold"
+            >
+              Establish Outbound Link
+            </button>
           </div>
         </section>
 
@@ -225,8 +327,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
                 <span className="text-[9px] bg-black border border-df-border px-1 text-df-white">secrets/*</span>
               </div>
             </div>
-            <button className="w-full py-2 border border-df-border text-[10px] text-df-gray hover:text-df-white hover:border-df-white transition-colors uppercase">
+            <button 
+              onClick={handleClearCache}
+              className="w-full py-2 border border-df-border text-[10px] text-df-gray hover:text-red-400 hover:border-red-400 transition-colors uppercase font-bold"
+            >
               Clear Local Cache
+            </button>
+            <button 
+              onClick={onNavigateToOnboarding}
+              className="w-full py-2 border border-df-border text-[10px] text-df-gray hover:text-df-orange hover:border-df-orange transition-colors uppercase font-bold flex items-center justify-center gap-2"
+            >
+              <RotateCcw size={10} /> Re-run Onboarding
             </button>
           </div>
         </section>

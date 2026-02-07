@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowRight, GitPullRequest, Users, Zap, Square, Mail, MessageCircle } from 'lucide-react';
 import { UserConfig } from '../types';
-import { initiateOAuth } from '../services/oauthService';
+import { initiateOAuth, revokeConnection } from '../services/oauthService';
 import { useConnections } from '../contexts/ConnectionContext';
-import { getXUserProfile } from '../services/xOAuthService';
+import { getXUserProfile, clearUserProfileCache } from '../services/xOAuthService';
 
 interface OnboardingProps {
   onComplete: () => void;
@@ -119,29 +119,48 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
   };
 
   const handleConnect = async (key: keyof UserConfig) => {
-    if (config[key]) return;
-    
-    setConnecting(key);
+    // Map UserConfig keys to OAuth platform names
+    const platformMap: Record<string, 'x' | 'reddit' | 'discord' | 'email'> = {
+      xConnected: 'x',
+      redditConnected: 'reddit',
+      discordConnected: 'discord',
+      emailConnected: 'email',
+    };
 
-    try {
-      // Map UserConfig keys to OAuth platform names
-      const platformMap: Record<string, 'x' | 'reddit' | 'discord' | 'email'> = {
-        xConnected: 'x',
-        redditConnected: 'reddit',
-        discordConnected: 'discord',
-        emailConnected: 'email',
-      };
+    const platform = platformMap[key];
+    if (!platform) return;
 
-      const platform = platformMap[key];
-      if (!platform) {
-        throw new Error(`Unknown platform: ${key}`);
+    // If already connected, disconnect
+    if (config[key]) {
+      setConnecting(key);
+      try {
+        await revokeConnection(platform);
+        // Clear cached profile data for X
+        if (platform === 'x') {
+          clearUserProfileCache();
+          setXUsername(null);
+        }
+        // Update local state immediately for responsive UI
+        setConfig((prev) => ({ ...prev, [key]: false }));
+        // Dispatch event to update global connection state
+        window.dispatchEvent(new CustomEvent('oauth-complete', {
+          detail: { platform, connected: false }
+        }));
+      } catch (error) {
+        console.error(`Failed to disconnect ${key}:`, error);
+      } finally {
+        setConnecting(null);
       }
+      return;
+    }
 
+    // Not connected — initiate OAuth
+    setConnecting(key);
+    try {
       await initiateOAuth(platform);
       // OAuth flow will redirect, callback handler will update state
     } catch (error) {
       console.error(`Failed to connect ${key}:`, error);
-      // Show error to user (you might want to add a toast/notification system)
       alert(`Failed to connect: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setConnecting(null);
@@ -304,19 +323,18 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
                 <button
                   key={id}
                   onClick={() => handleConnect(id)}
-                  disabled={isConnecting || isConnected}
+                  disabled={isConnecting}
                   className={`
                     flex flex-col items-center gap-4 group transition-all duration-300
-                    ${isConnected ? 'text-df-orange' : 'text-df-gray hover:text-df-white'}
-                    ${isConnecting ? 'opacity-50 cursor-wait' : ''}
-                    ${isConnected ? 'cursor-default' : 'cursor-pointer'}
+                    ${isConnected ? 'text-df-orange hover:text-df-gray' : 'text-df-gray hover:text-df-white'}
+                    ${isConnecting ? 'opacity-50 cursor-wait' : 'cursor-pointer'}
                   `}
                 >
                   <div className={`
                     w-16 h-16 flex items-center justify-center border-2 shrink-0
                     transition-all duration-300
                     ${isConnected 
-                        ? 'border-df-orange bg-df-orange/10 shadow-[4px_4px_0px_rgba(255,98,0,0.2)]' 
+                        ? 'border-df-orange bg-df-orange/10 shadow-[4px_4px_0px_rgba(255,98,0,0.2)] group-hover:border-red-500 group-hover:bg-red-900/10 group-hover:shadow-none' 
                         : 'border-[#222] bg-[#080808] group-hover:border-df-gray'}
                   `}>
                     {imagePath ? (

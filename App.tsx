@@ -66,6 +66,45 @@ const App: React.FC = () => {
           }
           sessionStorage.setItem(PROCESSING_KEY, 'true');
 
+          // Check if the OAuth state exists locally.
+          // If not, this callback was initiated by the Electron app (which
+          // opened the system browser via shell.openExternal). The state is
+          // in Electron's localStorage, not the browser's. Redirect to the
+          // brick:// protocol so the Electron app can handle it.
+          try {
+            const urlObj = new URL(url);
+            const code = urlObj.searchParams.get('code');
+            const state = urlObj.searchParams.get('state');
+
+            if (code && state) {
+              const stateKey = `oauth_state_${state}`;
+              const hasLocalState = localStorage.getItem(stateKey);
+
+              if (!hasLocalState) {
+                // State not found locally — hand off to Electron via brick:// protocol
+                // Determine the platform from the URL path
+                let platformPath = 'twitter';
+                if (url.includes('/auth/reddit/')) platformPath = 'reddit';
+                else if (url.includes('/auth/discord/')) platformPath = 'discord';
+                else if (url.includes('/auth/email/')) platformPath = 'email';
+
+                const brickUrl = `brick://auth/${platformPath}/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+                
+                // Show brief feedback before redirect
+                document.title = 'BRICK — Redirecting to app...';
+                window.location.href = brickUrl;
+
+                // Clean up after a short delay (in case the redirect works)
+                setTimeout(() => {
+                  sessionStorage.removeItem(PROCESSING_KEY);
+                }, 2000);
+                return;
+              }
+            }
+          } catch {
+            // If URL parsing fails, fall through to normal processing
+          }
+
           // Clean up URL immediately to prevent reprocessing on refresh
           window.history.replaceState({}, document.title, '/');
 
@@ -80,6 +119,9 @@ const App: React.FC = () => {
 
     handleOAuthRedirect();
   }, []);
+
+  // Track processed auth codes so we never exchange the same code twice
+  const processedCodes = React.useRef<Set<string>>(new Set());
 
   const processOAuthCallback = async (url: string) => {
     try {
@@ -115,6 +157,14 @@ const App: React.FC = () => {
       if (!code || !state) {
         return; // Not an OAuth callback
       }
+
+      // Deduplicate: never process the same authorization code twice.
+      // Auth codes are single-use; a second exchange attempt always fails.
+      if (processedCodes.current.has(code)) {
+        console.log('[OAuth] Ignoring duplicate callback for code:', code.slice(0, 8) + '...');
+        return;
+      }
+      processedCodes.current.add(code);
 
       // Determine platform from URL path
       // Handle both HTTP URLs (web) and protocol URLs (Electron/Capacitor)
@@ -182,6 +232,7 @@ const App: React.FC = () => {
             toneContext={toneContext} 
             setToneContext={setToneContext}
             onNavigateToOnboarding={handleNavigateToOnboarding}
+            onOpenInputChannels={() => setView('setup')}
           />
         );
         

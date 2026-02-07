@@ -38,17 +38,15 @@ const getTwitterClientSecret = (): string => {
 };
 
 const getRedirectUri = (): string => {
-  // Allow forcing Capacitor mode via env variable
-  const forceCapacitor = import.meta.env.VITE_CAPACITOR === 'true';
-
   if (isElectron()) {
-    // Electron uses custom protocol: brick://auth/twitter/callback
-    return import.meta.env.VITE_TWITTER_REDIRECT_URI || 'brick://auth/twitter/callback';
-  } else if (isNativePlatform() || forceCapacitor) {
-    // Capacitor uses app bundle ID: com.brick.app://auth/twitter/callback
-    return import.meta.env.VITE_TWITTER_REDIRECT_URI || 'com.brick.app://auth/twitter/callback';
+    // Electron ALWAYS uses custom protocol — never localhost.
+    // The brick:// handler in the main process catches the callback.
+    return 'brick://auth/twitter/callback';
+  } else if (isNativePlatform()) {
+    // Capacitor (iOS/Android) uses the app bundle scheme.
+    return 'com.brick.app://auth/twitter/callback';
   }
-  // Web uses HTTP/HTTPS
+  // Web fallback (dev/preview only) — use env or origin
   return import.meta.env.VITE_TWITTER_REDIRECT_URI || `${window.location.origin}/auth/twitter/callback`;
 };
 
@@ -91,8 +89,15 @@ export async function initiateXOAuth(): Promise<void> {
 
   // Open browser for OAuth flow based on platform
   if (isElectron()) {
-    // Electron: Open in default browser (protocol handler will catch callback)
-    window.open(authUrl, '_blank');
+    // Electron: Open in system browser (Safari/Chrome) for passkey/WebAuthn support.
+    // The brick:// protocol handler will catch the callback.
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI?.openExternal) {
+      await electronAPI.openExternal(authUrl);
+    } else {
+      // Fallback: open in new window (passkeys won't work here)
+      window.open(authUrl, '_blank');
+    }
   } else if (isNativePlatform()) {
     // Capacitor Native (iOS/Android): Use Browser plugin
     const { Browser } = await import('@capacitor/browser');
