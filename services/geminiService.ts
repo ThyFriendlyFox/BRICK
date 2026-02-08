@@ -2,11 +2,55 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { Platform } from "../types";
 
-// NOTE: In a real app, this would be a secure backend call or use an ephemeral token.
-// For this demo, we assume process.env.API_KEY is available (injected by the environment).
-const apiKey = process.env.API_KEY || ''; 
+// ─── API Key Management ──────────────────────────────────────────────────────
 
-const ai = new GoogleGenAI({ apiKey });
+const STORAGE_KEY = 'brick_gemini_api_key';
+
+/**
+ * Get the current API key (from localStorage, then env fallback).
+ */
+export function getApiKey(): string {
+  // User-configured key takes priority
+  const stored = localStorage.getItem(STORAGE_KEY);
+  if (stored) return stored;
+  // Env fallback (from .env / vite define)
+  return process.env.API_KEY || process.env.GEMINI_API_KEY || '';
+}
+
+/**
+ * Save an API key (persists across sessions).
+ */
+export function setApiKey(key: string): void {
+  if (key.trim()) {
+    localStorage.setItem(STORAGE_KEY, key.trim());
+  } else {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+}
+
+/**
+ * Check if an API key is configured.
+ */
+export function hasApiKey(): boolean {
+  return getApiKey().length > 0;
+}
+
+// ─── Gemini Client (lazy, recreated when key changes) ────────────────────────
+
+let cachedKey = '';
+let ai: GoogleGenAI | null = null;
+
+function getClient(): GoogleGenAI | null {
+  const key = getApiKey();
+  if (!key) return null;
+  if (key !== cachedKey || !ai) {
+    ai = new GoogleGenAI({ apiKey: key });
+    cachedKey = key;
+  }
+  return ai;
+}
+
+// ─── Draft Generation ────────────────────────────────────────────────────────
 
 interface GeneratedContent {
   title?: string;
@@ -34,15 +78,17 @@ export const generateDraftContent = async (
   codeSnippet?: string,
   toneContext?: string
 ): Promise<GeneratedContent> => {
-  if (!apiKey) {
+  const client = getClient();
+
+  if (!client) {
      // Fallback for demo without key
      return new Promise(resolve => {
         setTimeout(() => {
             resolve({
                 title: platform === Platform.REDDIT ? "Update: " + context : undefined,
-                content: `[DEMO MODE - NO API KEY]\n\nJust shipped ${context}.\n\nThe flow is feeling good. #buildinpublic`
+                content: `[NO API KEY]\n\nAdd your Gemini API key in Settings → AI Engine to enable AI drafts.\n\nContext: ${context}`
             })
-        }, 1500);
+        }, 500);
      });
   }
 
@@ -71,8 +117,8 @@ export const generateDraftContent = async (
       - For Discord: Use Discord-flavored markdown (code blocks, bolding). Keep it community-focused. Imagine it's for a #changelog or #dev-log channel.
     `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+    const response = await client.models.generateContent({
+      model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -88,7 +134,7 @@ export const generateDraftContent = async (
     console.error("Gemini Generation Error:", error);
     return {
       title: "Error Generating Draft",
-      content: "Could not generate draft. Please check your API Key configuration."
+      content: "Could not generate draft. Please check your API Key in Settings → AI Engine."
     };
   }
 };

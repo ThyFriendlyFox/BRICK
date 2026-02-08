@@ -1,38 +1,41 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Check, Edit2 } from 'lucide-react';
-import { Draft, Platform } from '../types';
+import { Play, Check, Edit2, Server, GitBranch, Folder } from 'lucide-react';
+import { Draft, Platform, InputEvent } from '../types';
 import { generateDraftContent } from '../services/geminiService';
-import { SAMPLE_CODE_SNIPPET } from '../constants';
 import { useConnections } from '../contexts/ConnectionContext';
 import { postTweet, postTweetThread } from '../services/xOAuthService';
 
 interface DraftsPanelProps {
   activePlatform: Platform;
   setActivePlatform: (p: Platform) => void;
-  triggerContext: string | null; // Simulates "External" event like code change
+  triggerEvent: InputEvent | null;
   toneContext: string;
 }
 
-const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlatform, triggerContext, toneContext }) => {
+const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlatform, triggerEvent, toneContext }) => {
   const { isConnected } = useConnections();
   const [currentDraft, setCurrentDraft] = useState<Draft | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [history, setHistory] = useState<Draft[]>([]);
+  const [lastEvent, setLastEvent] = useState<InputEvent | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const processedEvents = useRef<Set<number>>(new Set());
   
   const platforms = [Platform.ALL, Platform.X, Platform.REDDIT, Platform.DISCORD, Platform.EMAIL];
 
-  // Effect to handle incoming "triggers" from the mock IDE
+  // Effect to handle incoming input channel events
   useEffect(() => {
-    if (triggerContext) {
-      handleGenerate(triggerContext);
+    if (triggerEvent && !processedEvents.current.has(triggerEvent.timestamp)) {
+      processedEvents.current.add(triggerEvent.timestamp);
+      setLastEvent(triggerEvent);
+      handleGenerate(triggerEvent.context, triggerEvent.codeSnippet);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [triggerContext]);
+  }, [triggerEvent]);
 
   const itemHeight = 48;
 
@@ -110,22 +113,19 @@ const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlat
     }
   };
 
-  const handleGenerate = async (context: string) => {
-    if (activePlatform === Platform.ALL) {
-      // Don't generate when ALL is selected
-      return;
-    }
+  const handleGenerate = async (context: string, codeSnippet?: string) => {
+    // If ALL is selected, default to X for generation
+    const targetPlatform = activePlatform === Platform.ALL ? Platform.X : activePlatform;
     
     setIsGenerating(true);
     setCurrentDraft(null); // Clear previous draft visual immediately
     
-    // Simulate thinking/network
-    const result = await generateDraftContent(activePlatform, context, SAMPLE_CODE_SNIPPET, toneContext);
+    const result = await generateDraftContent(targetPlatform, context, codeSnippet, toneContext);
     
     const newDraft: Draft = {
       id: Date.now().toString(),
       timestamp: Date.now(),
-      platform: activePlatform,
+      platform: targetPlatform,
       content: result.content,
       title: result.title,
       mediaUrl: "placeholder",
@@ -224,8 +224,19 @@ const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlat
         )}
 
         {!currentDraft && !isGenerating && (
-          <div className="flex items-center justify-center h-full text-df-gray text-sm">
-            Start coding – I’m watching.
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <span className="text-df-gray text-sm">
+              {lastEvent ? 'Ready for next event.' : 'Start coding – I’m watching.'}
+            </span>
+            {lastEvent && (
+              <div className="flex items-center gap-2 text-[9px] text-df-gray">
+                <span>Last:</span>
+                {lastEvent.source === 'mcp' && <Server size={10} className="text-df-orange" />}
+                {lastEvent.source === 'git' && <GitBranch size={10} className="text-df-orange" />}
+                {lastEvent.source === 'watcher' && <Folder size={10} className="text-df-orange" />}
+                <span className="text-df-white truncate max-w-[200px]">{lastEvent.context}</span>
+              </div>
+            )}
           </div>
         )}
 

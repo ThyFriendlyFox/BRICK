@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { Shield, Zap, Globe, Cpu, Link, Lock, EyeOff, Mic, Upload, Check, RefreshCw, Layers, Server, GitBranch, Folder, RotateCcw } from 'lucide-react';
+import { Shield, Zap, Globe, Cpu, Link, Lock, EyeOff, Mic, Upload, Check, RefreshCw, Layers, Server, GitBranch, Folder, RotateCcw, Eye, EyeOff as EyeOffIcon, Key } from 'lucide-react';
 import { useConnections } from '../contexts/ConnectionContext';
 import { getMcpStatus, isMcpAvailable, type McpStatus } from '../services/mcpServerService';
 import { getGitStatus, isGitAvailable, type GitStatus } from '../services/gitWatcherService';
 import { getWatcherStatus, isWatcherAvailable, type WatcherStatus } from '../services/fileWatcherService';
+import { getApiKey, setApiKey, hasApiKey } from '../services/geminiService';
 
 interface SettingsPanelProps {
   toneContext: string;
@@ -26,6 +27,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
   const [mcpStatus, setMcpStatus] = useState<McpStatus>({ running: false, port: null, ip: null, activeSessions: 0, totalEvents: 0 });
   const [gitStatus, setGitStatus] = useState<GitStatus>({ watching: false, repoPath: null, branch: null, totalCommits: 0 });
   const [watcherStatus, setWatcherStatus] = useState<WatcherStatus>({ watching: false, folders: [], totalEvents: 0 });
+
+  // AI API key
+  const [apiKeyInput, setApiKeyInput] = useState(() => getApiKey());
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeySaved, setApiKeySaved] = useState(false);
 
   // Poll inbound channel status
   useEffect(() => {
@@ -301,8 +307,58 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <span className="text-xs text-df-gray">Current Model</span>
-              <span className="text-xs text-df-white font-mono">gemini-3-flash</span>
+              <span className="text-xs text-df-white font-mono">gemini-2.5-flash</span>
             </div>
+
+            {/* API Key Input */}
+            <div className="bg-[#111] border border-df-border p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] text-df-gray uppercase flex items-center gap-1">
+                  <Key size={10} /> Gemini API Key
+                </label>
+                <span className={`text-[9px] font-bold uppercase ${hasApiKey() ? 'text-green-500' : 'text-red-400'}`}>
+                  {hasApiKey() ? 'CONFIGURED' : 'NOT SET'}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-grow relative">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={apiKeyInput}
+                    onChange={(e) => {
+                      setApiKeyInput(e.target.value);
+                      setApiKeySaved(false);
+                    }}
+                    placeholder="AIza..."
+                    className="w-full bg-black border border-df-border text-xs text-df-white p-2 pr-8 outline-none focus:border-df-orange transition-colors font-mono"
+                  />
+                  <button
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-df-gray hover:text-df-white"
+                  >
+                    {showApiKey ? <EyeOffIcon size={12} /> : <Eye size={12} />}
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    setApiKey(apiKeyInput);
+                    setApiKeySaved(true);
+                    setTimeout(() => setApiKeySaved(false), 2000);
+                  }}
+                  className={`px-3 py-2 text-[10px] font-bold uppercase transition-colors shrink-0 ${
+                    apiKeySaved 
+                      ? 'bg-green-900 text-green-400' 
+                      : 'bg-df-white text-black hover:bg-df-orange'
+                  }`}
+                >
+                  {apiKeySaved ? <Check size={12} /> : 'SAVE'}
+                </button>
+              </div>
+              <p className="text-[8px] text-df-gray">
+                Get your key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-df-orange hover:text-df-white underline">aistudio.google.com</a>. Stored locally on this device only.
+              </p>
+            </div>
+
             <div className="flex items-center gap-2">
               <input type="checkbox" defaultChecked className="accent-df-orange" />
               <span className="text-[10px] text-df-gray uppercase">Enable Search Grounding</span>

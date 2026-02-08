@@ -6,10 +6,13 @@ import FeedbackPanel from './components/FeedbackPanel';
 import SettingsPanel from './components/SettingsPanel';
 import Onboarding from './components/Onboarding';
 import InputChannelsSetup from './components/InputChannelsSetupModal';
-import { Platform } from './types';
+import { Platform, InputEvent } from './types';
 import { handleOAuthCallback } from './services/oauthService';
 import { ConnectionProvider } from './contexts/ConnectionContext';
 import { isElectron, isNativePlatform } from './utils/platform';
+import { onMcpProgress, isMcpAvailable } from './services/mcpServerService';
+import { onGitCommit, isGitAvailable } from './services/gitWatcherService';
+import { onFileChange, isWatcherAvailable } from './services/fileWatcherService';
 
 export type ActivityTab = 'devflow' | 'settings';
 
@@ -22,8 +25,8 @@ const App: React.FC = () => {
   const [activeActivity, setActiveActivity] = useState<ActivityTab>('devflow');
   const [activeTab, setActiveTab] = useState<'drafts' | 'feedback'>('drafts');
   const [activePlatform, setActivePlatform] = useState<Platform>(Platform.X);
-  // triggerContext is kept for prop interface, but currently unused without the simulator or real backend
-  const [triggerContext, setTriggerContext] = useState<string | null>(null);
+  // Input channel events → triggers draft generation in DraftsPanel
+  const [triggerEvent, setTriggerEvent] = useState<InputEvent | null>(null);
   const [isIdeConnected, setIsIdeConnected] = useState(false);
   
   // State for AI Voice Calibration
@@ -31,6 +34,50 @@ const App: React.FC = () => {
   
   // State for Credits
   const [credits] = useState(85);
+
+  // ── Input Channel Listeners ──────────────────────────────────────────────
+  // MCP: coding agent sends log_progress
+  useEffect(() => {
+    if (!isMcpAvailable()) return;
+    return onMcpProgress((event) => {
+      setTriggerEvent({
+        source: 'mcp',
+        context: event.summary,
+        timestamp: Date.now(),
+      });
+    });
+  }, []);
+
+  // Git: new commit detected
+  useEffect(() => {
+    if (!isGitAvailable()) return;
+    return onGitCommit((event) => {
+      setTriggerEvent({
+        source: 'git',
+        context: `Commit on ${event.branch}: ${event.commit.message}`,
+        codeSnippet: event.diff,
+        timestamp: Date.now(),
+      });
+    });
+  }, []);
+
+  // File watcher: code files changed
+  useEffect(() => {
+    if (!isWatcherAvailable()) return;
+    return onFileChange((event) => {
+      const fileList = event.files
+        .filter(f => !f.sensitive)
+        .slice(0, 10)
+        .map(f => f.path)
+        .join('\n');
+      setTriggerEvent({
+        source: 'watcher',
+        context: event.summary,
+        codeSnippet: fileList || undefined,
+        timestamp: Date.now(),
+      });
+    });
+  }, []);
 
   // Handle OAuth callbacks
   useEffect(() => {
@@ -286,7 +333,7 @@ const App: React.FC = () => {
                     <DraftsPanel 
                       activePlatform={activePlatform} 
                       setActivePlatform={setActivePlatform} 
-                      triggerContext={triggerContext}
+                      triggerEvent={triggerEvent}
                       toneContext={toneContext}
                     />
                  </div>

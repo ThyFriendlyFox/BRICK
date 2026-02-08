@@ -35,3 +35,15 @@ export interface UserConfig {
   discordConnected: boolean;
   setupComplete: boolean;
 }
+
+/**
+ * An event from an input channel that triggers draft generation.
+ */
+export interface InputEvent {
+  source: 'mcp' | 'git' | 'watcher';
+  /** Human-readable summary of the coding activity */
+  context: string;
+  /** Optional code context (git diff, file list, etc.) */
+  codeSnippet?: string;
+  timestamp: number;
+}
