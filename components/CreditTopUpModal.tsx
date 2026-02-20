@@ -59,6 +59,7 @@ const CreditTopUpModal: React.FC<CreditTopUpModalProps> = ({ isOpen, onClose, re
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [purchaseSuccess, setPurchaseSuccess] = useState(false);
 
+  
   // Subscribe to credits (only when Firebase is configured and user exists)
   useEffect(() => {
     if (!isFirebaseConfigured() || !isAuthenticated || !user) return;
