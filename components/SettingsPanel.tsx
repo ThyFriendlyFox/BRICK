@@ -178,8 +178,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
     setProtocols(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // Clear cache with 3-step confirmation
+  const [clearStep, setClearStep] = useState(0); // 0=idle, 1=first warning, 2=second warning, 3=final confirm
+
   const handleClearCache = () => {
-    // Clear all BRICK-related localStorage items (preserve onboarding state)
+    setClearStep(1);
+  };
+
+  const executeClearCache = () => {
     const keysToKeep = ['onboarding_complete', 'onboarding_step'];
     const allKeys = Object.keys(localStorage);
     for (const key of allKeys) {
@@ -187,9 +193,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
         localStorage.removeItem(key);
       }
     }
-    // Clear sessionStorage
     sessionStorage.clear();
-    alert('Local cache cleared. Tokens and saved state have been removed.');
+    setClearStep(0);
+    window.location.reload();
   };
 
   // Auth
@@ -656,6 +662,110 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
             <p className="text-[9px] text-df-gray/30 uppercase tracking-[0.2em]">BRICK v1.0.4-alpha</p>
         </div>
       </div>
+
+      {/* Clear Cache Warning Modal (3 steps) */}
+      {clearStep > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 font-mono">
+          <div className="bg-df-black border border-df-border w-full max-w-sm mx-4 shadow-2xl">
+
+            {/* Step indicator */}
+            <div className="h-1 bg-df-border">
+              <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${(clearStep / 3) * 100}%` }} />
+            </div>
+
+            <div className="p-6">
+              {clearStep === 1 && (
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  <h3 className="text-sm font-black text-df-white uppercase">Are you sure?</h3>
+                  <p className="text-xs text-df-gray leading-relaxed">
+                    This will clear all locally stored data including OAuth tokens, API keys, tone calibration, and session history.
+                  </p>
+                  <p className="text-[10px] text-red-400 font-bold uppercase">
+                    You will be disconnected from all platforms.
+                  </p>
+                </div>
+              )}
+
+              {clearStep === 2 && (
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  <h3 className="text-sm font-black text-red-400 uppercase">This cannot be undone</h3>
+                  <p className="text-xs text-df-gray leading-relaxed">
+                    Your OAuth connections (X, Reddit, Discord, Email) will need to be re-established. Your Gemini API key will be removed.
+                  </p>
+                  <p className="text-[10px] text-df-gray">
+                    Cloud-synced credits (if signed in) are safe and won't be affected.
+                  </p>
+                </div>
+              )}
+
+              {clearStep === 3 && (
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  <h3 className="text-sm font-black text-red-500 uppercase">Final confirmation</h3>
+                  <div className="bg-red-900/20 border border-red-700/50 p-3">
+                    <p className="text-xs text-red-400">
+                      Click "CLEAR EVERYTHING" to permanently erase all local data. The app will reload.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Step 1: Continue on RIGHT */}
+            {clearStep === 1 && (
+              <div className="flex border-t border-df-border">
+                <button
+                  onClick={() => setClearStep(0)}
+                  className="w-1/2 py-4 text-df-gray hover:text-white text-[10px] font-bold uppercase border-r border-df-border"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => setClearStep(2)}
+                  className="w-1/2 py-4 text-red-400 hover:text-red-300 text-[10px] font-bold uppercase"
+                >
+                  Continue (1/3)
+                </button>
+              </div>
+            )}
+
+            {/* Step 2: Continue on LEFT, Cancel on RIGHT */}
+            {clearStep === 2 && (
+              <div className="flex border-t border-df-border">
+                <button
+                  onClick={() => setClearStep(3)}
+                  className="w-1/2 py-4 text-red-400 hover:text-red-300 text-[10px] font-bold uppercase border-r border-df-border"
+                >
+                  Continue (2/3)
+                </button>
+                <button
+                  onClick={() => setClearStep(0)}
+                  className="w-1/2 py-4 text-df-gray hover:text-white text-[10px] font-bold uppercase"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {/* Step 3: Full-width clear button (different from both previous positions) */}
+            {clearStep === 3 && (
+              <div className="border-t border-df-border">
+                <button
+                  onClick={() => setClearStep(0)}
+                  className="w-full py-3 text-df-gray hover:text-white text-[10px] font-bold uppercase border-b border-df-border"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeClearCache}
+                  className="w-full py-4 bg-red-900 text-red-400 hover:bg-red-800 text-[10px] font-bold uppercase"
+                >
+                  Clear Everything
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
