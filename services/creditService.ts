@@ -20,10 +20,15 @@ import { getFirebaseFirestore, isFirebaseConfigured } from './firebaseConfig';
 
 /**
  * Subscribe to a user's credit balance in real-time.
+ * Only subscribes when Firebase is configured and uid is present (signed-in user).
  * Returns an unsubscribe function.
  */
-export function subscribeToCredits(uid: string, callback: (credits: number) => void): Unsubscribe {
+export function subscribeToCredits(uid: string | null | undefined, callback: (credits: number) => void): Unsubscribe {
   if (!isFirebaseConfigured()) {
+    callback(0);
+    return () => {};
+  }
+  if (!uid || typeof uid !== 'string' || uid.length === 0) {
     callback(0);
     return () => {};
   }
@@ -31,16 +36,20 @@ export function subscribeToCredits(uid: string, callback: (credits: number) => v
   const db = getFirebaseFirestore();
   const userRef = doc(db, 'users', uid);
 
-  return onSnapshot(userRef, (snap) => {
-    if (snap.exists()) {
-      callback(snap.data().credits ?? 0);
-    } else {
+  return onSnapshot(
+    userRef,
+    (snap) => {
+      if (snap.exists()) {
+        callback(snap.data().credits ?? 0);
+      } else {
+        callback(0);
+      }
+    },
+    (error) => {
+      console.warn('[Credits] Subscription error (are Firestore rules deployed?):', error?.message ?? error);
       callback(0);
     }
-  }, (error) => {
-    console.error('[Credits] Subscription error:', error);
-    callback(0);
-  });
+  );
 }
 
 // ─── Credit Check & Deduction ────────────────────────────────────────────────

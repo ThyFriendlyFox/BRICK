@@ -8,7 +8,7 @@ Use this after creating or switching to the **brick-by-reagent** Firebase projec
 
 - **Create the database**  
   Firebase Console → **Firestore** → Create database (production mode; rules will lock down access).
-- **Deploy rules** (from project root):
+- **Deploy rules** (from project root) — **required** or you’ll see `Missing or insufficient permissions` when the app tries to read credits:
   ```bash
   firebase use brick-by-reagent
   firebase deploy --only firestore:rules
@@ -61,7 +61,16 @@ Use this after creating or switching to the **brick-by-reagent** Firebase projec
 
 ---
 
-## 5. Quick verification
+## 5. Troubleshooting
+
+- **`[Credits] Subscription error: Missing or insufficient permissions`**  
+  Deploy Firestore rules (step 1). Until rules are deployed, the client cannot read `users/{uid}` and the credit meter will show 0 and may log this error.
+- **Draft generation**  
+  If you added your own **Gemini API key** in Settings → AI Engine, drafts use that key and **do not use credits**. Credits are only used for Firebase AI (when you don’t set a key) and for paid channels (X, Reddit, Discord).
+
+---
+
+## 6. Quick verification
 
 - **Auth:** Sign in with Google (and passkey) in the Electron app; confirm redirect back to the app works.
 - **Credits:** Open “Top up credits”, pick a tier, complete Stripe Checkout; confirm balance updates and that the webhook runs in Stripe.
