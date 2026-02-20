@@ -12,7 +12,7 @@ import { ConnectionProvider } from './contexts/ConnectionContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { isElectron, isNativePlatform } from './utils/platform';
 import { onMcpProgress, isMcpAvailable } from './services/mcpServerService';
-import { onGitCommit, isGitAvailable } from './services/gitWatcherService';
+import { onGitCommit, isGitAvailable, getGitCommitLog } from './services/gitWatcherService';
 import { onFileChange, isWatcherAvailable } from './services/fileWatcherService';
 import { subscribeToCredits } from './services/creditService';
 import { isFirebaseConfigured } from './services/firebaseConfig';
@@ -76,9 +76,24 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // Git: new commit detected
+  // Git: new commit detected — also replay the latest missed commit on mount
   useEffect(() => {
     if (!isGitAvailable()) return;
+
+    // Replay: check if commits were detected before this listener was ready
+    getGitCommitLog().then((log) => {
+      if (log.length > 0) {
+        const latest = log[log.length - 1];
+        handleInputEvent({
+          source: 'git',
+          context: `Commit on ${latest.branch}: ${latest.commit.message}`,
+          codeSnippet: latest.diff,
+          timestamp: Date.now(),
+        });
+      }
+    }).catch(() => {});
+
+    // Listen for future commits
     return onGitCommit((event) => {
       handleInputEvent({
         source: 'git',
