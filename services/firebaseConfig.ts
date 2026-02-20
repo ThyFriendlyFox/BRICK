@@ -15,13 +15,13 @@ import { getFirestore, type Firestore } from 'firebase/firestore';
 // Security is enforced by Firebase Security Rules and App Check, not by
 // hiding these values.
 const firebaseConfig = {
-  apiKey: "AIzaSyB1YwnIORwNFiTDg5wF2xO0tVOvlG6MYDA",
-  authDomain: "gen-lang-client-0512464630.firebaseapp.com",
-  projectId: "gen-lang-client-0512464630",
-  storageBucket: "gen-lang-client-0512464630.firebasestorage.app",
-  messagingSenderId: "953043772323",
-  appId: "1:953043772323:web:78c6c55199592af5c5b016",
-  measurementId: "G-6WF9CSPVL8",
+  apiKey: "AIzaSyD5uvWmEe-JUXByVkidmQLFsE1PH65h2To",
+  authDomain: "brick-by-reagent.firebaseapp.com",
+  projectId: "brick-by-reagent",
+  storageBucket: "brick-by-reagent.firebasestorage.app",
+  messagingSenderId: "145818200578",
+  appId: "1:145818200578:web:0bd5fe13f0535bd7b2151b",
+  measurementId: "G-MGXG07YBVG",
 };
 
 // ─── Initialization (singleton) ──────────────────────────────────────────────
