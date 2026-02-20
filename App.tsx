@@ -148,6 +148,7 @@ const App: React.FC = () => {
             const code = urlObj.searchParams.get('code');
             const state = urlObj.searchParams.get('state');
 
+            
             if (code && state) {
               const stateKey = `oauth_state_${state}`;
               const hasLocalState = localStorage.getItem(stateKey);
