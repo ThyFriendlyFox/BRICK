@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Shield, Zap, Globe, Cpu, Link, Lock, EyeOff, Mic, Upload, Check, RefreshCw, Layers, Server, GitBranch, Folder, RotateCcw, Eye, EyeOff as EyeOffIcon, Key, User, LogOut, LogIn } from 'lucide-react';
+import { Shield, Zap, Cpu, Link, Mic, Upload, Check, Layers, Server, GitBranch, Folder, RotateCcw, Eye, EyeOff as EyeOffIcon, Key, User, LogOut, LogIn, Coins } from 'lucide-react';
 import { useConnections } from '../contexts/ConnectionContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getMcpStatus, isMcpAvailable, type McpStatus } from '../services/mcpServerService';
@@ -10,6 +10,85 @@ import { getApiKey, setApiKey, hasApiKey } from '../services/geminiService';
 import { fetchRecentTweets, isXConnected } from '../services/xOAuthService';
 import { signInWithGoogle, signInWithEmail, signUpWithEmail, signOut } from '../services/authService';
 import { isFirebaseConfigured } from '../services/firebaseConfig';
+import { subscribeToCredits } from '../services/creditService';
+import { requireCredits } from '../services/creditGate';
+
+// ─── Credit Section Component ────────────────────────────────────────────────
+
+const CreditSection: React.FC<{ onOpenTopUp?: () => void }> = ({ onOpenTopUp }) => {
+  const { user, isAuthenticated } = useAuth();
+  const { connections } = useConnections();
+  const [credits, setCredits] = useState(0);
+
+  const hasPaidChannel = connections.x || connections.reddit || connections.discord;
+  const needsCreditsForAI = !hasApiKey() && isFirebaseConfigured();
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      setCredits(0);
+      return;
+    }
+    return subscribeToCredits(user.uid, setCredits);
+  }, [isAuthenticated, user]);
+
+  return (
+    <section>
+      <h3 className="text-[10px] font-bold text-df-orange uppercase mb-4 flex items-center gap-2">
+        <Coins size={12} /> CREDITS
+      </h3>
+
+      <div className="space-y-3">
+        {/* Balance */}
+        <div className="bg-[#111] border border-df-border p-3 flex items-center justify-between">
+          <span className="text-[10px] text-df-gray uppercase">Balance</span>
+          <div className="flex items-baseline gap-1">
+            <span className="text-xl font-black text-df-white">{credits}</span>
+            <span className="text-[10px] font-bold text-df-orange">CR</span>
+          </div>
+        </div>
+
+        {/* What costs credits */}
+        <div className="bg-[#111] border border-df-border border-dashed p-3">
+          <p className="text-[9px] text-df-gray uppercase font-bold mb-2">Costs credits:</p>
+          <div className="space-y-1 text-[9px]">
+            <div className="flex justify-between"><span className="text-df-gray">Post to X / Reddit / Discord</span><span className="text-df-orange font-bold">1 CR</span></div>
+            <div className="flex justify-between"><span className="text-df-gray">Fetch feedback (X / Reddit / Discord)</span><span className="text-df-orange font-bold">1 CR</span></div>
+            <div className="flex justify-between"><span className="text-df-gray">Import X history</span><span className="text-df-orange font-bold">1 CR</span></div>
+            {needsCreditsForAI && (
+              <div className="flex justify-between"><span className="text-df-gray">AI drafts (no own key)</span><span className="text-df-orange font-bold">1 CR</span></div>
+            )}
+          </div>
+          <div className="mt-2 pt-2 border-t border-df-border text-[9px]">
+            <p className="text-green-500 uppercase font-bold mb-1">Free:</p>
+            <span className="text-df-gray">
+              {hasApiKey() ? 'AI drafts (own key) · ' : ''}Email · MCP · Git · File Watcher
+            </span>
+          </div>
+        </div>
+
+        {/* Top up button */}
+        {(hasPaidChannel || needsCreditsForAI) && (
+          <button
+            onClick={onOpenTopUp}
+            className="w-full py-3 border border-df-orange text-[10px] text-df-orange hover:bg-df-orange hover:text-df-black transition-colors uppercase font-bold flex items-center justify-center gap-2"
+          >
+            <Coins size={12} /> Top Up Credits
+          </button>
+        )}
+
+        {!hasPaidChannel && !needsCreditsForAI && (
+          <div className="bg-[#111] border border-df-border p-3">
+            <p className="text-[9px] text-df-gray">
+              Credits are needed when you connect to X, Reddit, or Discord.
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+};
+
+// ─── Settings Panel ──────────────────────────────────────────────────────────
 
 interface SettingsPanelProps {
   toneContext: string;
@@ -17,10 +96,9 @@ interface SettingsPanelProps {
   onNavigateToOnboarding?: () => void;
   onOpenInputChannels?: () => void;
   onOpenTopUp?: () => void;
-  credits?: number;
 }
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneContext, onNavigateToOnboarding, onOpenInputChannels, onOpenTopUp, credits = 0 }) => {
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneContext, onNavigateToOnboarding, onOpenInputChannels, onOpenTopUp }) => {
   const { connections } = useConnections();
   const [analyzed, setAnalyzed] = useState(false);
   const [protocols, setProtocols] = useState({
@@ -59,6 +137,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
       const connected = await isXConnected();
       if (!connected) {
         alert('Connect your X account first (Outbound Channels).');
+        return;
+      }
+
+      // X API call costs credits
+      const creditCheck = await requireCredits('x', 'Import X history');
+      if (!creditCheck.allowed) {
+        alert(creditCheck.error || 'Insufficient credits');
         return;
       }
 
@@ -162,12 +247,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
       <div className="flex-grow overflow-y-auto p-4 space-y-8">
 
         {/* ACCOUNT SECTION */}
-        {isFirebaseConfigured() && (
         <section>
           <h3 className="text-[10px] font-bold text-df-orange uppercase mb-4 flex items-center gap-2">
             <User size={12} /> ACCOUNT
           </h3>
-          {isAuthenticated && user ? (
+          {!isFirebaseConfigured() ? (
+            <div className="bg-[#111] border border-df-border p-3 space-y-2">
+              <p className="text-[9px] text-df-gray">
+                Firebase is not configured. Add your Firebase config to enable user accounts and credit sync across devices.
+              </p>
+              <p className="text-[8px] text-df-gray/60">
+                Without an account, you can still use BRICK locally with your own API key (Settings → AI Engine).
+              </p>
+            </div>
+          ) : isAuthenticated && user ? (
             <div className="bg-[#111] border border-df-border p-3 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -181,21 +274,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
                   <LogOut size={10} /> Sign Out
                 </button>
               </div>
-              {/* Credits display + top up */}
-              <div className="flex items-center justify-between pt-2 border-t border-df-border">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-lg font-black text-df-white">{credits}</span>
-                  <span className="text-[10px] font-bold text-df-orange">CR</span>
-                </div>
-                <button
-                  onClick={onOpenTopUp}
-                  className="px-3 py-1.5 bg-df-orange text-df-black text-[10px] font-bold uppercase hover:bg-white transition-colors"
-                >
-                  TOP UP
-                </button>
-              </div>
-              <div className="text-[9px] text-df-gray">
-                Credits cover AI drafting, posting to X, and feedback fetching. Free APIs (email, local tools) don't use credits.
+              <div className="text-[9px] text-df-gray pt-2 border-t border-df-border">
+                Credits sync across all your devices when signed in.
               </div>
             </div>
           ) : (
@@ -254,7 +334,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ toneContext, setToneConte
             </div>
           )}
         </section>
-        )}
+
+        {/* CREDITS SECTION */}
+        <CreditSection onOpenTopUp={onOpenTopUp} />
 
         {/* INBOUND CHANNELS SECTION */}
         <section>

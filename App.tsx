@@ -39,6 +39,7 @@ const App: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   const [credits, setCredits] = useState(0);
   const [showTopUp, setShowTopUp] = useState(false);
+  const [topUpReason, setTopUpReason] = useState<string | undefined>();
 
   useEffect(() => {
     if (!isAuthenticated || !user) {
@@ -90,6 +91,17 @@ const App: React.FC = () => {
         timestamp: Date.now(),
       });
     });
+  }, []);
+
+  // Auto-open top-up modal when a credit gate rejects an action
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setTopUpReason(detail?.reason || 'You need credits to complete this action.');
+      setShowTopUp(true);
+    };
+    window.addEventListener('brick:credits-needed', handler);
+    return () => window.removeEventListener('brick:credits-needed', handler);
   }, []);
 
   // Handle OAuth callbacks
@@ -293,8 +305,7 @@ const App: React.FC = () => {
             setToneContext={setToneContext}
             onNavigateToOnboarding={handleNavigateToOnboarding}
             onOpenInputChannels={() => setView('setup')}
-            onOpenTopUp={() => setShowTopUp(true)}
-            credits={credits}
+            onOpenTopUp={() => { setTopUpReason(undefined); setShowTopUp(true); }}
           />
         );
         
@@ -404,10 +415,21 @@ const App: React.FC = () => {
           </div>
         </button>
 
-        {/* Vertical Credit Meter - always opens settings */}
+        {/* Vertical Credit Meter - click opens top-up modal or settings */}
         <div 
-          onClick={() => setActiveActivity('settings')}
-          title={isAuthenticated ? `${credits} credits` : 'Sign in to get credits'}
+          onClick={() => {
+            const hasPaidChannel =
+              !!localStorage.getItem('oauth_tokens_x') ||
+              !!localStorage.getItem('oauth_tokens_reddit') ||
+              !!localStorage.getItem('oauth_tokens_discord');
+            if (hasPaidChannel) {
+              setTopUpReason(undefined);
+              setShowTopUp(true);
+            } else {
+              setActiveActivity('settings');
+            }
+          }}
+          title={`${credits} CR — click to top up`}
           className="flex-grow w-full flex flex-col items-center justify-center py-4 px-2 group cursor-pointer"
         >
           <div className="w-8 h-full bg-black border border-df-border relative overflow-hidden flex flex-col justify-end shadow-inner group-hover:border-df-orange transition-colors">
@@ -453,10 +475,10 @@ const App: React.FC = () => {
       </div>
     </div>
       )}
-      <CreditTopUpModal 
-        isOpen={showTopUp} 
-        onClose={() => setShowTopUp(false)} 
-        currentCredits={credits} 
+      <CreditTopUpModal
+        isOpen={showTopUp}
+        onClose={() => setShowTopUp(false)}
+        reason={topUpReason}
       />
     </ConnectionProvider>
     </AuthProvider>

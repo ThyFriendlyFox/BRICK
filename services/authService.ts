@@ -9,6 +9,10 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  signInAnonymously as firebaseSignInAnonymously,
+  linkWithPopup,
+  linkWithCredential,
+  EmailAuthProvider,
   GoogleAuthProvider,
   signOut as firebaseSignOut,
   onAuthStateChanged as firebaseOnAuthStateChanged,
@@ -64,6 +68,83 @@ export async function signInWithGoogle(): Promise<BrickUser> {
 export async function signOut(): Promise<void> {
   const auth = getFirebaseAuth();
   await firebaseSignOut(auth);
+}
+
+/**
+ * Sign in anonymously. Creates a real Firebase UID without any credentials.
+ * Used for frictionless credit purchases when user doesn't want a full account.
+ */
+export async function signInAnonymously(): Promise<BrickUser> {
+  const auth = getFirebaseAuth();
+  const result = await firebaseSignInAnonymously(auth);
+  await ensureUserDoc(result.user);
+  return mapUser(result.user);
+}
+
+/**
+ * Ensure current user is authenticated (anonymous or otherwise).
+ * If not signed in at all, creates an anonymous account silently.
+ * Returns the user's UID.
+ */
+export async function ensureAuthenticated(): Promise<string> {
+  const auth = getFirebaseAuth();
+  if (auth.currentUser) {
+    return auth.currentUser.uid;
+  }
+  const result = await firebaseSignInAnonymously(auth);
+  await ensureUserDoc(result.user);
+  return result.user.uid;
+}
+
+/**
+ * Check if current user is anonymous (not linked to email/Google).
+ */
+export function isAnonymousUser(): boolean {
+  const auth = getFirebaseAuth();
+  return auth.currentUser?.isAnonymous ?? false;
+}
+
+/**
+ * Upgrade an anonymous account to a Google account.
+ * Preserves the existing UID and all associated data (credits, transactions).
+ */
+export async function linkWithGoogle(): Promise<BrickUser> {
+  const auth = getFirebaseAuth();
+  if (!auth.currentUser) throw new Error('No current user to link');
+
+  const provider = new GoogleAuthProvider();
+  const result = await linkWithPopup(auth.currentUser, provider);
+
+  // Update the user doc with the new info
+  const db = getFirebaseFirestore();
+  const userRef = doc(db, 'users', result.user.uid);
+  const { updateDoc } = await import('firebase/firestore');
+  await updateDoc(userRef, {
+    email: result.user.email,
+    displayName: result.user.displayName || '',
+  });
+
+  return mapUser(result.user);
+}
+
+/**
+ * Upgrade an anonymous account to an email/password account.
+ */
+export async function linkWithEmail(email: string, password: string): Promise<BrickUser> {
+  const auth = getFirebaseAuth();
+  if (!auth.currentUser) throw new Error('No current user to link');
+
+  const credential = EmailAuthProvider.credential(email, password);
+  const result = await linkWithCredential(auth.currentUser, credential);
+
+  const db = getFirebaseFirestore();
+  const userRef = doc(db, 'users', result.user.uid);
+  const { updateDoc } = await import('firebase/firestore');
+  await updateDoc(userRef, {
+    email: result.user.email,
+  });
+
+  return mapUser(result.user);
 }
 
 export function getCurrentUser(): BrickUser | null {

@@ -5,6 +5,7 @@ import { Draft, Platform, InputEvent } from '../types';
 import { generateDraftContent } from '../services/geminiService';
 import { useConnections } from '../contexts/ConnectionContext';
 import { postTweet, postTweetThread } from '../services/xOAuthService';
+import { requireCredits, refundCredits, costsCreditForPlatform } from '../services/creditGate';
 
 interface DraftsPanelProps {
   activePlatform: Platform;
@@ -157,6 +158,17 @@ const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlat
     setIsPosting(true);
 
     try {
+      // Check credits for paid platforms (X, Reddit, Discord)
+      const platformKey = platformMap[currentDraft.platform];
+      if (platformKey && costsCreditForPlatform(platformKey)) {
+        const creditCheck = await requireCredits(platformKey, `Post to ${currentDraft.platform}`);
+        if (!creditCheck.allowed) {
+          alert(creditCheck.error || 'Insufficient credits');
+          setIsPosting(false);
+          return;
+        }
+      }
+
       // Handle X/Twitter posting
       if (currentDraft.platform === Platform.X) {
         // Check if content contains double newlines (thread indicator)
@@ -200,6 +212,10 @@ const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlat
     } catch (error) {
       console.error('Failed to post:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      // Refund credit if posting failed on a paid platform
+      if (platformKey && costsCreditForPlatform(platformKey)) {
+        await refundCredits(1, `Refund: failed to post to ${currentDraft.platform}`);
+      }
       alert(`Failed to post: ${errorMessage}`);
     } finally {
       setIsPosting(false);
