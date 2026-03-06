@@ -194,7 +194,7 @@ const DraftsPanel: React.FC<DraftsPanelProps> = ({ activePlatform, setActivePlat
     <div className="flex flex-col h-full w-full bg-df-black relative">
 
       {/* DRAFT FEED */}
-      <div ref={feedRef} className="flex-grow overflow-y-auto relative">
+      <div ref={feedRef} className="flex-grow overflow-y-auto relative border-b border-df-border">
         {isGenerating && (
           <div className="sticky top-0 left-0 w-full h-1 bg-df-border overflow-hidden z-10">
             <div className="h-full bg-df-orange animate-pulse w-1/3 mx-auto" />
