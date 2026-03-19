@@ -86,7 +86,9 @@ const DEFAULT_CANCEL_URL = "https://brick.reagent-systems.com/payment-cancelled"
 function isValidRedirectUrl(url) {
     try {
         const u = new URL(url);
-        return u.protocol === "https:" && !u.hostname.match(/^(localhost|127\.0\.0\.1|\d+\.\d+\.\d+\.\d+)$/);
+        if (u.protocol !== "http:" && u.protocol !== "https:")
+            return false;
+        return u.hostname.length > 0;
     }
     catch (_a) {
         return false;

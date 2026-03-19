@@ -368,6 +368,36 @@ const App: React.FC = () => {
     return null;
   };
 
+  // Payment success/cancel — Stripe redirects here after checkout
+  const path = window.location.pathname;
+  if (path === '/payment-success') {
+    return (
+      <div className="h-screen w-screen bg-black font-mono flex flex-col items-center justify-center p-8 text-center">
+        <div className="w-16 h-16 bg-df-orange/20 border-2 border-df-orange flex items-center justify-center mb-6 text-df-orange text-3xl">✓</div>
+        <h1 className="text-df-white font-bold text-xl mb-2 uppercase tracking-wider">Payment successful</h1>
+        <p className="text-df-gray text-sm mb-8 max-w-sm">
+          Your credits have been added. You can close this tab and return to BRICK.
+        </p>
+        <a href="/" className="px-6 py-3 bg-df-orange text-black font-bold text-xs uppercase hover:bg-white transition-colors">
+          Return to BRICK
+        </a>
+      </div>
+    );
+  }
+  if (path === '/payment-cancelled') {
+    return (
+      <div className="h-screen w-screen bg-black font-mono flex flex-col items-center justify-center p-8 text-center">
+        <h1 className="text-df-white font-bold text-xl mb-2 uppercase tracking-wider">Payment cancelled</h1>
+        <p className="text-df-gray text-sm mb-8 max-w-sm">
+          Your payment was not completed. You can close this tab and try again.
+        </p>
+        <a href="/" className="px-6 py-3 bg-df-orange text-black font-bold text-xs uppercase hover:bg-white transition-colors">
+          Return to BRICK
+        </a>
+      </div>
+    );
+  }
+
   return (
     <AuthProvider>
     <ConnectionProvider>
