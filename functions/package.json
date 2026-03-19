@@ -1,7 +1,7 @@
 {
   "name": "brick-functions",
   "description": "BRICK Cloud Functions for Stripe payments and credit management",
-  "main": "index.js",
+  "main": "lib/index.js",
   "scripts": {
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
@@ -11,7 +11,7 @@
     "logs": "firebase functions:log"
   },
   "engines": {
-    "node": "18"
+    "node": "20"
   },
   "dependencies": {
     "firebase-admin": "^13.0.0",

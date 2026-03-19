@@ -118,8 +118,11 @@ const CreditTopUpModal: React.FC<CreditTopUpModalProps> = ({ isOpen, onClose, re
       } else {
         setPurchaseError('Failed to create checkout session');
       }
-    } catch (err) {
-      setPurchaseError(err instanceof Error ? err.message : 'Payment failed');
+    } catch (err: unknown) {
+      const msg = err && typeof err === 'object' && 'message' in err
+        ? String((err as { message: string }).message)
+        : 'Payment failed';
+      setPurchaseError(msg);
     } finally {
       setPurchasing(false);
     }

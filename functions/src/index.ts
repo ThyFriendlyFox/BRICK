@@ -41,7 +41,7 @@ async function getTiers() {
 
 // ─── getPricingTiers ─────────────────────────────────────────────────────────
 
-export const getPricingTiers = onCall(async (request) => {
+export const getPricingTiers = onCall({ cors: true }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Must be signed in");
   }
@@ -50,70 +50,91 @@ export const getPricingTiers = onCall(async (request) => {
 
 // ─── createCheckoutSession ───────────────────────────────────────────────────
 
+const DEFAULT_SUCCESS_URL = "https://brick.reagent-systems.com/payment-success";
+const DEFAULT_CANCEL_URL = "https://brick.reagent-systems.com/payment-cancelled";
+
+function isValidRedirectUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && !u.hostname.match(/^(localhost|127\.0\.0\.1|\d+\.\d+\.\d+\.\d+)$/);
+  } catch {
+    return false;
+  }
+}
+
 export const createCheckoutSession = onCall(
-  { secrets: [stripeSecretKey] },
+  { secrets: [stripeSecretKey], cors: true },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Must be signed in to purchase credits");
-    }
+    try {
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "Must be signed in to purchase credits");
+      }
 
-    const uid = request.auth.uid;
-    const data = request.data as { tierId?: string; successUrl?: string; cancelUrl?: string };
-    const tierId = data.tierId;
+      const uid = request.auth.uid;
+      const data = request.data as { tierId?: string; successUrl?: string; cancelUrl?: string };
+      const tierId = data.tierId;
 
-    if (!tierId) {
-      throw new HttpsError("invalid-argument", "tierId is required");
-    }
+      if (!tierId) {
+        throw new HttpsError("invalid-argument", "tierId is required");
+      }
 
-    const tiers = await getTiers();
-    const tier = tiers.find((t: any) => t.id === tierId);
-    if (!tier) {
-      throw new HttpsError("not-found", `Tier '${tierId}' not found`);
-    }
+      const tiers = await getTiers();
+      const tier = tiers.find((t: any) => t.id === tierId);
+      if (!tier) {
+        throw new HttpsError("not-found", `Tier '${tierId}' not found`);
+      }
 
-    const stripe = new Stripe(stripeSecretKey.value());
+      const stripe = new Stripe(stripeSecretKey.value());
 
-    // Get or create Stripe customer
-    const userRef = db.collection("users").doc(uid);
-    const userDoc = await userRef.get();
-    let stripeCustomerId = userDoc.data()?.stripeCustomerId;
+      // Get or create Stripe customer
+      const userRef = db.collection("users").doc(uid);
+      const userDoc = await userRef.get();
+      let stripeCustomerId = userDoc.data()?.stripeCustomerId;
 
-    if (!stripeCustomerId) {
-      const customer = await stripe.customers.create({
-        email: userDoc.data()?.email || request.auth.token.email || undefined,
-        metadata: { firebaseUid: uid },
-      });
-      stripeCustomerId = customer.id;
-      await userRef.update({ stripeCustomerId });
-    }
+      if (!stripeCustomerId) {
+        const customer = await stripe.customers.create({
+          email: userDoc.data()?.email || request.auth.token.email || undefined,
+          metadata: { firebaseUid: uid },
+        });
+        stripeCustomerId = customer.id;
+        await userRef.set({ stripeCustomerId }, { merge: true });
+      }
 
-    const session = await stripe.checkout.sessions.create({
-      customer: stripeCustomerId,
-      payment_method_types: ["card"],
-      mode: "payment",
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `BRICK Credits: ${tier.credits} CR`,
-              description: tier.label,
+      const successUrl = (data.successUrl && isValidRedirectUrl(data.successUrl)) ? data.successUrl : DEFAULT_SUCCESS_URL;
+      const cancelUrl = (data.cancelUrl && isValidRedirectUrl(data.cancelUrl)) ? data.cancelUrl : DEFAULT_CANCEL_URL;
+
+      const session = await stripe.checkout.sessions.create({
+        customer: stripeCustomerId,
+        payment_method_types: ["card"],
+        mode: "payment",
+        line_items: [
+          {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: `BRICK Credits: ${tier.credits} CR`,
+                description: tier.label,
+              },
+              unit_amount: tier.dollars * 100,
             },
-            unit_amount: tier.dollars * 100,
+            quantity: 1,
           },
-          quantity: 1,
+        ],
+        metadata: {
+          firebaseUid: uid,
+          tierId: tier.id,
+          credits: tier.credits.toString(),
         },
-      ],
-      metadata: {
-        firebaseUid: uid,
-        tierId: tier.id,
-        credits: tier.credits.toString(),
-      },
-      success_url: data.successUrl || "https://brick.reagent-systems.com/payment-success",
-      cancel_url: data.cancelUrl || "https://brick.reagent-systems.com/payment-cancelled",
-    });
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+      });
 
-    return { sessionId: session.id, url: session.url };
+      return { sessionId: session.id, url: session.url };
+    } catch (err: any) {
+      if (err instanceof HttpsError) throw err;
+      console.error("[createCheckoutSession]", err);
+      throw new HttpsError("internal", err?.message ?? "Payment setup failed");
+    }
   }
 );
 
