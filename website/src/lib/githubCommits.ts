@@ -20,9 +20,9 @@ type GitHubCommitApi = {
 
 export function getGithubRepoParts(): { owner: string; repo: string; full: string } {
 	const raw =
-		(import.meta.env.PUBLIC_GITHUB_REPO as string | undefined)?.trim() || 'reagent-systems/BRICK';
+		(import.meta.env.PUBLIC_GITHUB_REPO as string | undefined)?.trim() || 'ThyFriendlyFox/BRICK';
 	const parts = raw.split('/');
-	const owner = parts[0] || 'reagent-systems';
+	const owner = parts[0] || 'ThyFriendlyFox';
 	const repo = parts[1] || 'BRICK';
 	return { owner, repo, full: `${owner}/${repo}` };
 }
